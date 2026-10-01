@@ -11,17 +11,15 @@ export default function AdminPage() {
         setMessage('Generating...');
         
         try {
-            // 1. GRAB THE DIGITAL BADGE WE SAVED DURING LOGIN
             const token = localStorage.getItem('token');
             
-            // 2. SEND IT TO THE BACKEND TO PROVE WE ARE AN ADMIN
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/auth/register', {
+            // FIXED: Pointing to your custom Admin Router instead of the basic Auth Router!
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/admin/add-user', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}` 
                 },
-                // We set a default password for new accounts here
                 body: JSON.stringify({ userId: newId, password: 'password123', role: role })
             });
 
@@ -31,7 +29,6 @@ export default function AdminPage() {
                 setMessage(`Success! Created ${role}: ${newId}. Default password: password123`);
                 setNewId('');
             } else {
-                // Now it will show the REAL error from the backend
                 setMessage(`Backend Error: ${data.message || 'Unauthorized or Failed'}`);
             }
         } catch (err) {
