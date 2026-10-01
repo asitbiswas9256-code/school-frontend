@@ -1,7 +1,9 @@
 export const metadata = {
   title: 'Academic Portal',
-  description: 'School Authentication System',
-}
+  description: 'School Management System',
+  manifest: '/manifest.json',
+  themeColor: '#000080',
+};
 
 export default function RootLayout({ children }) {
   return (
@@ -10,5 +12,5 @@ export default function RootLayout({ children }) {
         {children}
       </body>
     </html>
-  )
+  );
 }
