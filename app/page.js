@@ -1,11 +1,13 @@
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
     const [userId, setUserId] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [lang, setLang] = useState('en-IN');
+    const router = useRouter(); // Initializes the Next.js instant router
 
     const content = {
         'en-IN': {
@@ -49,14 +51,14 @@ export default function LoginPage() {
             const data = await res.json();
 
             if (res.ok) {
-                // 1. SAVE THE DIGITAL ID BADGE TO THE BROWSER!
+                // Save the digital ID badge
                 localStorage.setItem('token', data.token);
                 
-                alert('Login Successful! Welcome, ' + data.role);
-                
-                // 2. TELEPORT ADMINS TO THE NEW CONTROL PANEL
+                // Instant React Teleportation (No Reloading!)
                 if (data.role === 'Headmaster' || data.role === 'Assistant Headmaster') {
-                    window.location.href = '/admin';
+                    router.push('/admin');
+                } else {
+                    alert('Login Successful! Welcome, ' + data.role);
                 }
             } else {
                 setError(data.message || 'Authentication failed');
