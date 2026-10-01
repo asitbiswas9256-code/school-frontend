@@ -40,7 +40,6 @@ export default function LoginPage() {
         }
 
         try {
-            // This is your actual live Render server you just built!
             const res = await fetch('https://school-backend-szf6.onrender.com/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -50,7 +49,15 @@ export default function LoginPage() {
             const data = await res.json();
 
             if (res.ok) {
+                // 1. SAVE THE DIGITAL ID BADGE TO THE BROWSER!
+                localStorage.setItem('token', data.token);
+                
                 alert('Login Successful! Welcome, ' + data.role);
+                
+                // 2. TELEPORT ADMINS TO THE NEW CONTROL PANEL
+                if (data.role === 'Headmaster' || data.role === 'Assistant Headmaster') {
+                    window.location.href = '/admin';
+                }
             } else {
                 setError(data.message || 'Authentication failed');
             }
@@ -104,5 +111,4 @@ export default function LoginPage() {
             </div>
         </div>
     );
-                  }
-              
+}
