@@ -1,3 +1,97 @@
+'use client';
+import { useState, useEffect } from 'react';
+
+export default function AdminPage() {
+    const [activeTab, setActiveTab] = useState('leaves'); // Default to new feature!
+    const [role, setRole] = useState('Assistant Headmaster');
+    const [newId, setNewId] = useState('');
+    const [message, setMessage] = useState('');
+    const [reports, setReports] = useState([]);
+    const [loadingReports, setLoadingReports] = useState(false);
+    const [leaves, setLeaves] = useState([]);
+    const [loadingLeaves, setLoadingLeaves] = useState(false);
+    const [feedback, setFeedback] = useState({}); // Stores feedback for each leave ID
+
+    const handleLogout = () => { localStorage.removeItem('token'); window.location.href = '/'; };
+
+    const handleGenerate = async () => {
+        if (!newId) return setMessage('Enter an ID.');
+        setMessage('Generating...');
+        try {
+            const token = localStorage.getItem('token');
+            const ep = role === 'Assistant Headmaster' ? '/api/admin/add-assistant' : '/api/admin/add-user';
+            const res = await fetch(`https://school-backend-szf6.onrender.com${ep}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ userId: newId, password: 'password123', role })
+            });
+            const data = await res.json();
+            if (res.ok) { setMessage(`Success! Created ${role}: ${newId}`); setNewId(''); }
+            else setMessage(`Error: ${data.message}`);
+        } catch (err) { setMessage('Network Error'); }
+    };
+
+    const fetchReports = async () => {
+        setLoadingReports(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/reports/all', { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            if (res.ok) setReports(data);
+        } catch (err) {}
+        setLoadingReports(false);
+    };
+
+    const updateReportStatus = async (id, status) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/reports/${id}/status`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status })
+            });
+            if (res.ok) {
+                setReports(reports.map(r => r._id === id ? { ...r, status } : r));
+                setMessage(`Report marked ${status}.`);
+            }
+        } catch (err) { setMessage('Error updating status.'); }
+    };
+
+    const fetchLeaves = async () => {
+        setLoadingLeaves(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/leaves/all', { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            if (res.ok) setLeaves(data);
+        } catch (err) {}
+        setLoadingLeaves(false);
+    };
+
+    const updateLeaveStatus = async (id, status) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/leaves/${id}/status`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status, adminFeedback: feedback[id] || '' })
+            });
+            if (res.ok) {
+                setLeaves(leaves.map(l => l._id === id ? { ...l, status, adminFeedback: feedback[id] || '' } : l));
+                setMessage(`Leave ${status}.`);
+            }
+        } catch (err) { setMessage('Error updating leave.'); }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'reports') fetchReports();
+        if (activeTab === 'leaves') fetchLeaves();
+    }, [activeTab]);
+
+    const getBadgeStyle = (status) => {
+        if (status === 'Pending') return { bg: '#fef08a', text: '#854d0e' }; 
+        if (status === 'Reviewed' || status === 'Approved') return { bg: '#dcfce7', text: '#166534' }; 
+        if (status === 'Rejected') return { bg: '#fee2e2', text: '#9f1239' };
+        return { bg: '#e2e8f0', text: '#334155' }; 
+    };
+
     return (
         <div style={{ minHeight: '100vh', padding: '2rem 1rem', backgroundColor: '#f8fafc', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
             <div style={{ maxWidth: '600px', margin: '0 auto', backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
@@ -57,3 +151,50 @@
                         )}
                     </div>
                 )}
+
+                {activeTab === 'leaves' && (
+                    <div>
+                        {loadingLeaves ? <p style={{ textAlign: 'center', color: '#64748b' }}>Loading applications...</p> : leaves.length === 0 ? <p style={{ textAlign: 'center', color: '#64748b' }}>No leave applications.</p> : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {leaves.map((leave) => {
+                                    const badge = getBadgeStyle(leave.status);
+                                    return (
+                                        <div key={leave._id} style={{ backgroundColor: '#f0fdfa', padding: '1rem', borderRadius: '8px', border: '1px solid #ccfbf1', borderLeft: `4px solid ${badge.bg === '#dcfce7' ? '#166534' : badge.bg === '#fee2e2' ? '#9f1239' : '#eab308'}` }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                                                <h3 style={{ margin: 0, color: '#0f766e', fontSize: '16px' }}>{leave.applicantId} ({leave.applicantRole})</h3>
+                                                <span style={{ backgroundColor: badge.bg, color: badge.text, padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>{leave.status}</span>
+                                            </div>
+                                            <p style={{ fontSize: '13px', color: '#475569', margin: '0 0 0.5rem 0' }}><strong>Dates:</strong> {new Date(leave.startDate).toLocaleDateString()} to {new Date(leave.endDate).toLocaleDateString()}</p>
+                                            <div style={{ backgroundColor: 'white', padding: '0.75rem', borderRadius: '6px', fontSize: '14px', border: '1px solid #ccfbf1', marginBottom: '0.75rem' }}>{leave.reason}</div>
+                                            
+                                            {/* Admin Action Area */}
+                                            {leave.status === 'Pending' ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="Optional feedback (e.g. Approved, enjoy!)" 
+                                                        value={feedback[leave._id] || ''}
+                                                        onChange={(e) => setFeedback({...feedback, [leave._id]: e.target.value})}
+                                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                                                    />
+                                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <button onClick={() => updateLeaveStatus(leave._id, 'Approved')} style={{ flex: 1, padding: '0.5rem', backgroundColor: '#166534', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Approve</button>
+                                                        <button onClick={() => updateLeaveStatus(leave._id, 'Rejected')} style={{ flex: 1, padding: '0.5rem', backgroundColor: '#9f1239', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>Reject</button>
+                                                    </div>
+                                                </div>
+                                            ) : leave.adminFeedback ? (
+                                                <div style={{ backgroundColor: 'white', padding: '0.5rem', borderRadius: '4px', border: '1px dashed #cbd5e1', fontSize: '12px', color: '#334155' }}>
+                                                    <strong>Your Note:</strong> {leave.adminFeedback}
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
