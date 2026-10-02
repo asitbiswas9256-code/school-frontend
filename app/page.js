@@ -7,7 +7,7 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [lang, setLang] = useState('en-IN');
-    const router = useRouter(); // Initializes the Next.js instant router
+    const router = useRouter(); 
 
     const content = {
         'en-IN': {
@@ -54,11 +54,15 @@ export default function LoginPage() {
                 // Save the digital ID badge
                 localStorage.setItem('token', data.token);
                 
-                // Instant React Teleportation (No Reloading!)
+                // NEW ROUTING LOGIC: Sends each role to their specific dashboard
                 if (data.role === 'Headmaster' || data.role === 'Assistant Headmaster') {
                     router.push('/admin');
+                } else if (data.role === 'Student') {
+                    router.push('/student');
+                } else if (data.role === 'Teacher') {
+                    router.push('/teacher');
                 } else {
-                    alert('Login Successful! Welcome, ' + data.role);
+                    router.push('/');
                 }
             } else {
                 setError(data.message || 'Authentication failed');
