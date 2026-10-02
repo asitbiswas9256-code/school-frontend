@@ -15,12 +15,16 @@ export default function StudentDashboard() {
     const [reportMessage, setReportMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // --- NEW: My Reports (Outbox) State ---
+    const [myReports, setMyReports] = useState([]);
+    const [loadingReports, setLoadingReports] = useState(false);
+
     const handleLogout = () => {
         localStorage.removeItem('token');
         window.location.href = '/';
     };
 
-    // Automatically fetch academic records on login
+    // 1. Fetch academic records on login
     useEffect(() => {
         const fetchProfile = async () => {
             try {
@@ -42,7 +46,32 @@ export default function StudentDashboard() {
         fetchProfile();
     }, []);
 
-    // Function to submit a confidential report
+    // 2. NEW: Fetch My Past Reports
+    const fetchMyReports = async () => {
+        setLoadingReports(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/reports/my-reports', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const json = await res.json();
+            if (res.ok) {
+                setMyReports(json);
+            }
+        } catch (err) {
+            console.error("Error fetching reports", err);
+        }
+        setLoadingReports(false);
+    };
+
+    // Automatically fetch past reports when the student clicks the Confidential Tip tab
+    useEffect(() => {
+        if (activeTab === 'report') {
+            fetchMyReports();
+        }
+    }, [activeTab]);
+
+    // 3. Submit a confidential report
     const handleSubmitReport = async (e) => {
         e.preventDefault();
         if (!reportTitle || !reportDescription) {
@@ -63,7 +92,7 @@ export default function StudentDashboard() {
                 body: JSON.stringify({ 
                     title: reportTitle, 
                     description: reportDescription, 
-                    evidenceUrl: '' // We will add photo uploads in the mobile-native phase
+                    evidenceUrl: '' 
                 })
             });
 
@@ -73,6 +102,7 @@ export default function StudentDashboard() {
                 setReportMessage('Success: Your tip has been securely delivered to the Headmaster.');
                 setReportTitle('');
                 setReportDescription('');
+                fetchMyReports(); // Instantly refresh the outbox list below!
             } else {
                 setReportMessage(`Error: ${json.message}`);
             }
@@ -82,11 +112,17 @@ export default function StudentDashboard() {
         setIsSubmitting(false);
     };
 
+    // Helper function for dynamic badge colors matching the admin side
+    const getBadgeStyle = (status) => {
+        if (status === 'Pending') return { bg: '#fef08a', text: '#854d0e' }; 
+        if (status === 'Reviewed') return { bg: '#bfdbfe', text: '#1e3a8a' }; 
+        return { bg: '#dcfce7', text: '#166534' }; 
+    };
+
     return (
         <div style={{ minHeight: '100vh', padding: '2rem 1rem', backgroundColor: '#f8fafc', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
             <div style={{ maxWidth: '600px', margin: '0 auto', backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
                 
-                {/* Header & Logout */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                     <h1 style={{ color: '#000080', margin: 0, fontSize: '24px' }}>Student Portal</h1>
                     <button onClick={handleLogout} style={{ padding: '0.4rem 0.8rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
@@ -94,7 +130,6 @@ export default function StudentDashboard() {
                     </button>
                 </div>
 
-                {/* Tab Navigation */}
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '1rem' }}>
                     <button 
                         onClick={() => { setActiveTab('records'); setReportMessage(''); }}
@@ -110,7 +145,7 @@ export default function StudentDashboard() {
                     </button>
                 </div>
 
-                {/* TAB 1: Academic Records (Your existing working code) */}
+                {/* TAB 1: Academic Records */}
                 {activeTab === 'records' && (
                     <div>
                         {error ? (
@@ -173,7 +208,7 @@ export default function StudentDashboard() {
                         <div style={{ padding: '1rem', backgroundColor: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', marginBottom: '1.5rem' }}>
                             <h3 style={{ margin: '0 0 0.5rem 0', color: '#9f1239', fontSize: '16px' }}>The Under Zone</h3>
                             <p style={{ margin: 0, fontSize: '13px', color: '#be123c' }}>
-                                This system is strictly confidential. Your report will be encrypted and sent directly to the Headmaster. Teachers and other students cannot see this.
+                                This system is strictly confidential. Your report will be encrypted and sent directly to the Headmaster.
                             </p>
                         </div>
 
@@ -201,7 +236,7 @@ export default function StudentDashboard() {
                                     value={reportDescription}
                                     onChange={(e) => setReportDescription(e.target.value)}
                                     placeholder="Provide as much detail as possible. Who, what, when, where?" 
-                                    rows="5"
+                                    rows="4"
                                     style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '16px', resize: 'vertical' }} 
                                 />
                             </div>
@@ -214,6 +249,35 @@ export default function StudentDashboard() {
                                 {isSubmitting ? 'Sending securely...' : 'Submit Confidential Report'}
                             </button>
                         </form>
+
+                        {/* NEW: My Past Tips Section */}
+                        <hr style={{ margin: '2rem 0 1.5rem 0', border: 'none', borderTop: '2px dashed #e2e8f0' }} />
+                        <h4 style={{ margin: '0 0 1rem 0', color: '#334155', fontSize: '16px' }}>My Past Tips</h4>
+                        
+                        {loadingReports ? (
+                            <p style={{ color: '#64748b', fontSize: '14px' }}>Loading past tips...</p>
+                        ) : myReports.length === 0 ? (
+                            <p style={{ color: '#64748b', fontSize: '14px', fontStyle: 'italic' }}>You haven't submitted any tips yet.</p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                {myReports.map(report => {
+                                    const badge = getBadgeStyle(report.status);
+                                    return (
+                                        <div key={report._id} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                                                <strong style={{ color: '#0f172a', fontSize: '15px' }}>{report.title}</strong>
+                                                <span style={{ backgroundColor: badge.bg, color: badge.text, padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                                                    {report.status}
+                                                </span>
+                                            </div>
+                                            <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                                                Submitted on: {new Date(report.createdAt).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
