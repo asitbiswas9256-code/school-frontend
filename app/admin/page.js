@@ -11,9 +11,8 @@ export default function AdminPage() {
         setMessage('Generating...');
         
         try {
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('token'); // Grabbing the saved badge
             
-            // FIXED: Pointing to your custom Admin Router instead of the basic Auth Router!
             const res = await fetch('https://school-backend-szf6.onrender.com/api/admin/add-user', {
                 method: 'POST',
                 headers: { 
@@ -36,11 +35,25 @@ export default function AdminPage() {
         }
     };
 
+    // THIS IS THE NEW LOGOUT FUNCTION
+    const handleLogout = () => {
+        localStorage.removeItem('token'); // Destroys the digital badge!
+        window.location.href = '/'; // Teleports you back to the login screen
+    };
+
     return (
         <div style={{ minHeight: '100vh', width: '100%', overflowX: 'hidden', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1rem', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
             
             <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', width: '100%', maxWidth: '400px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
-                <h2 style={{ color: '#000080', textAlign: 'center', marginBottom: '1.5rem' }}>Admin Control Panel</h2>
+                
+                {/* NEW LOG OUT BUTTON */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
+                    <button onClick={handleLogout} style={{ padding: '0.4rem 0.8rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>
+                        Log Out
+                    </button>
+                </div>
+
+                <h2 style={{ color: '#000080', textAlign: 'center', marginTop: '0', marginBottom: '1.5rem' }}>Admin Control Panel</h2>
                 
                 {message && (
                     <div style={{ padding: '0.75rem', marginBottom: '1.5rem', backgroundColor: message.includes('Success') ? '#dcfce7' : '#fee2e2', color: message.includes('Success') ? '#166534' : '#b91c1c', borderRadius: '6px', textAlign: 'center', fontSize: '14px', fontWeight: 'bold' }}>
