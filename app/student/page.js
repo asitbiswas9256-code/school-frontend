@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 
 export default function StudentDashboard() {
     // Tab State
-    const [activeTab, setActiveTab] = useState('records'); // 'records' or 'report'
+    const [activeTab, setActiveTab] = useState('records'); // 'records', 'report', or 'leave'
 
     // Academic Data State
     const [data, setData] = useState(null);
@@ -15,9 +15,18 @@ export default function StudentDashboard() {
     const [reportMessage, setReportMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // --- NEW: My Reports (Outbox) State ---
+    // My Reports (Outbox) State
     const [myReports, setMyReports] = useState([]);
     const [loadingReports, setLoadingReports] = useState(false);
+
+    // --- NEW: Leave Application State ---
+    const [leaveStartDate, setLeaveStartDate] = useState('');
+    const [leaveEndDate, setLeaveEndDate] = useState('');
+    const [leaveReason, setLeaveReason] = useState('');
+    const [leaveMessage, setLeaveMessage] = useState('');
+    const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
+    const [myLeaves, setMyLeaves] = useState([]);
+    const [loadingLeaves, setLoadingLeaves] = useState(false);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -46,7 +55,7 @@ export default function StudentDashboard() {
         fetchProfile();
     }, []);
 
-    // 2. NEW: Fetch My Past Reports
+    // 2. Fetch My Past Reports
     const fetchMyReports = async () => {
         setLoadingReports(true);
         try {
@@ -55,54 +64,52 @@ export default function StudentDashboard() {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const json = await res.json();
-            if (res.ok) {
-                setMyReports(json);
-            }
+            if (res.ok) setMyReports(json);
         } catch (err) {
             console.error("Error fetching reports", err);
         }
         setLoadingReports(false);
     };
 
-    // Automatically fetch past reports when the student clicks the Confidential Tip tab
-    useEffect(() => {
-        if (activeTab === 'report') {
-            fetchMyReports();
+    // 3. NEW: Fetch My Leave Applications
+    const fetchMyLeaves = async () => {
+        setLoadingLeaves(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/leaves/my-leaves', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const json = await res.json();
+            if (res.ok) setMyLeaves(json);
+        } catch (err) {
+            console.error("Error fetching leaves", err);
         }
+        setLoadingLeaves(false);
+    };
+
+    // Automatically fetch relevant data when tabs change
+    useEffect(() => {
+        if (activeTab === 'report') fetchMyReports();
+        if (activeTab === 'leave') fetchMyLeaves();
     }, [activeTab]);
 
-    // 3. Submit a confidential report
+    // Submit a confidential report
     const handleSubmitReport = async (e) => {
         e.preventDefault();
-        if (!reportTitle || !reportDescription) {
-            return setReportMessage('Please provide both a title and details.');
-        }
-        
+        if (!reportTitle || !reportDescription) return setReportMessage('Please provide both a title and details.');
         setIsSubmitting(true);
         setReportMessage('Encrypting and sending securely...');
-        
         try {
             const token = localStorage.getItem('token');
             const res = await fetch('https://school-backend-szf6.onrender.com/api/reports/submit', {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
-                },
-                body: JSON.stringify({ 
-                    title: reportTitle, 
-                    description: reportDescription, 
-                    evidenceUrl: '' 
-                })
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ title: reportTitle, description: reportDescription, evidenceUrl: '' })
             });
-
             const json = await res.json();
-
             if (res.ok) {
                 setReportMessage('Success: Your tip has been securely delivered to the Headmaster.');
-                setReportTitle('');
-                setReportDescription('');
-                fetchMyReports(); // Instantly refresh the outbox list below!
+                setReportTitle(''); setReportDescription(''); fetchMyReports();
             } else {
                 setReportMessage(`Error: ${json.message}`);
             }
@@ -112,11 +119,40 @@ export default function StudentDashboard() {
         setIsSubmitting(false);
     };
 
-    // Helper function for dynamic badge colors matching the admin side
+    // --- NEW: Submit a Leave Application ---
+    const handleSubmitLeave = async (e) => {
+        e.preventDefault();
+        if (!leaveStartDate || !leaveEndDate || !leaveReason) {
+            return setLeaveMessage('Please fill out all fields.');
+        }
+        setIsSubmittingLeave(true);
+        setLeaveMessage('Submitting application...');
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/leaves/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ startDate: leaveStartDate, endDate: leaveEndDate, reason: leaveReason })
+            });
+            const json = await res.json();
+            if (res.ok) {
+                setLeaveMessage('Success: Leave application submitted to the Headmaster.');
+                setLeaveStartDate(''); setLeaveEndDate(''); setLeaveReason(''); fetchMyLeaves(); 
+            } else {
+                setLeaveMessage(`Error: ${json.message}`);
+            }
+        } catch (err) {
+            setLeaveMessage('Network error while submitting leave.');
+        }
+        setIsSubmittingLeave(false);
+    };
+
+    // Helper function for dynamic badge colors
     const getBadgeStyle = (status) => {
         if (status === 'Pending') return { bg: '#fef08a', text: '#854d0e' }; 
-        if (status === 'Reviewed') return { bg: '#bfdbfe', text: '#1e3a8a' }; 
-        return { bg: '#dcfce7', text: '#166534' }; 
+        if (status === 'Reviewed' || status === 'Approved') return { bg: '#dcfce7', text: '#166534' }; 
+        if (status === 'Rejected') return { bg: '#fee2e2', text: '#9f1239' };
+        return { bg: '#e2e8f0', text: '#334155' }; 
     };
 
     return (
@@ -130,18 +166,25 @@ export default function StudentDashboard() {
                     </button>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '1rem' }}>
+                {/* 3-Tab Navigation (Mobile Friendly) */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '1rem', flexWrap: 'wrap' }}>
                     <button 
-                        onClick={() => { setActiveTab('records'); setReportMessage(''); }}
-                        style={{ flex: 1, padding: '0.75rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'records' ? '#000080' : '#f1f5f9', color: activeTab === 'records' ? 'white' : '#475569' }}
+                        onClick={() => { setActiveTab('records'); setReportMessage(''); setLeaveMessage(''); }}
+                        style={{ flex: '1 1 30%', padding: '0.75rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'records' ? '#000080' : '#f1f5f9', color: activeTab === 'records' ? 'white' : '#475569', fontSize: '13px' }}
                     >
-                        Academic Records
+                        Records
                     </button>
                     <button 
-                        onClick={() => setActiveTab('report')}
-                        style={{ flex: 1, padding: '0.75rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'report' ? '#b91c1c' : '#f1f5f9', color: activeTab === 'report' ? 'white' : '#475569' }}
+                        onClick={() => { setActiveTab('leave'); setReportMessage(''); }}
+                        style={{ flex: '1 1 30%', padding: '0.75rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'leave' ? '#0f766e' : '#f1f5f9', color: activeTab === 'leave' ? 'white' : '#475569', fontSize: '13px' }}
                     >
-                        Confidential Tip
+                        Leave App
+                    </button>
+                    <button 
+                        onClick={() => { setActiveTab('report'); setLeaveMessage(''); }}
+                        style={{ flex: '1 1 30%', padding: '0.75rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'report' ? '#b91c1c' : '#f1f5f9', color: activeTab === 'report' ? 'white' : '#475569', fontSize: '13px' }}
+                    >
+                        Under Zone
                     </button>
                 </div>
 
@@ -149,9 +192,7 @@ export default function StudentDashboard() {
                 {activeTab === 'records' && (
                     <div>
                         {error ? (
-                            <div style={{ padding: '1rem', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '8px', textAlign: 'center', fontWeight: 'bold' }}>
-                                {error}
-                            </div>
+                            <div style={{ padding: '1rem', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '8px', textAlign: 'center', fontWeight: 'bold' }}>{error}</div>
                         ) : !data ? (
                             <div style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>Fetching your live academic records...</div>
                         ) : (
@@ -185,16 +226,13 @@ export default function StudentDashboard() {
                                 <div style={{ padding: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
                                     <h4 style={{ margin: '0 0 1rem 0', color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>Financial Status</h4>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '16px' }}>
-                                        <span style={{ color: '#64748b' }}>Total Annual Fees:</span>
-                                        <strong>₹{data.profile.fees.totalAnnual}</strong>
+                                        <span style={{ color: '#64748b' }}>Total Annual Fees:</span><strong>₹{data.profile.fees.totalAnnual}</strong>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '16px' }}>
-                                        <span style={{ color: '#64748b' }}>Amount Paid:</span>
-                                        <strong style={{ color: '#166534' }}>₹{data.profile.fees.amountPaid}</strong>
+                                        <span style={{ color: '#64748b' }}>Amount Paid:</span><strong style={{ color: '#166534' }}>₹{data.profile.fees.amountPaid}</strong>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.75rem', borderTop: '1px dashed #cbd5e1', fontSize: '16px' }}>
-                                        <span style={{ color: '#64748b' }}>Pending Dues:</span>
-                                        <strong style={{ color: '#b91c1c' }}>₹{data.profile.fees.pendingDues}</strong>
+                                        <span style={{ color: '#64748b' }}>Pending Dues:</span><strong style={{ color: '#b91c1c' }}>₹{data.profile.fees.pendingDues}</strong>
                                     </div>
                                 </div>
                             </div>
@@ -202,85 +240,75 @@ export default function StudentDashboard() {
                     </div>
                 )}
 
-                {/* TAB 2: Confidential Report UI */}
-                {activeTab === 'report' && (
+                {/* TAB 2: NEW LEAVE APPLICATION UI */}
+                {activeTab === 'leave' && (
                     <div>
-                        <div style={{ padding: '1rem', backgroundColor: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', marginBottom: '1.5rem' }}>
-                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#9f1239', fontSize: '16px' }}>The Under Zone</h3>
-                            <p style={{ margin: 0, fontSize: '13px', color: '#be123c' }}>
-                                This system is strictly confidential. Your report will be encrypted and sent directly to the Headmaster.
-                            </p>
+                        <div style={{ padding: '1rem', backgroundColor: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: '8px', marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#0f766e', fontSize: '16px' }}>Leave Application</h3>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#115e59' }}>Submit your leave request directly to the Headmaster for approval.</p>
                         </div>
 
-                        {reportMessage && (
-                            <div style={{ padding: '0.75rem', marginBottom: '1.5rem', backgroundColor: reportMessage.includes('Success') ? '#dcfce7' : '#fee2e2', color: reportMessage.includes('Success') ? '#166534' : '#b91c1c', borderRadius: '6px', textAlign: 'center', fontSize: '14px', fontWeight: 'bold' }}>
-                                {reportMessage}
+                        {leaveMessage && (
+                            <div style={{ padding: '0.75rem', marginBottom: '1.5rem', backgroundColor: leaveMessage.includes('Success') ? '#dcfce7' : '#fee2e2', color: leaveMessage.includes('Success') ? '#166534' : '#b91c1c', borderRadius: '6px', textAlign: 'center', fontSize: '14px', fontWeight: 'bold' }}>
+                                {leaveMessage}
                             </div>
                         )}
 
-                        <form onSubmit={handleSubmitReport}>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>Subject / Incident Title:</label>
-                                <input 
-                                    type="text" 
-                                    value={reportTitle}
-                                    onChange={(e) => setReportTitle(e.target.value)}
-                                    placeholder="Brief title of the issue" 
-                                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '16px' }} 
-                                />
+                        <form onSubmit={handleSubmitLeave}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>Start Date:</label>
+                                    <input type="date" value={leaveStartDate} onChange={(e) => setLeaveStartDate(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '15px' }} />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>End Date:</label>
+                                    <input type="date" value={leaveEndDate} onChange={(e) => setLeaveEndDate(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '15px' }} />
+                                </div>
                             </div>
 
                             <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>Detailed Description:</label>
-                                <textarea 
-                                    value={reportDescription}
-                                    onChange={(e) => setReportDescription(e.target.value)}
-                                    placeholder="Provide as much detail as possible. Who, what, when, where?" 
-                                    rows="4"
-                                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '16px', resize: 'vertical' }} 
-                                />
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>Reason for Leave:</label>
+                                <textarea value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)} placeholder="Please explain why you need leave..." rows="3" style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '15px', resize: 'vertical' }} />
                             </div>
 
-                            <button 
-                                type="submit" 
-                                disabled={isSubmitting}
-                                style={{ width: '100%', padding: '0.85rem', backgroundColor: isSubmitting ? '#94a3b8' : '#b91c1c', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '16px', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
-                            >
-                                {isSubmitting ? 'Sending securely...' : 'Submit Confidential Report'}
+                            <button type="submit" disabled={isSubmittingLeave} style={{ width: '100%', padding: '0.85rem', backgroundColor: isSubmittingLeave ? '#94a3b8' : '#0f766e', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '16px', cursor: isSubmittingLeave ? 'not-allowed' : 'pointer' }}>
+                                {isSubmittingLeave ? 'Submitting...' : 'Submit Application'}
                             </button>
                         </form>
 
-                        {/* NEW: My Past Tips Section */}
+                        {/* My Past Leaves Section */}
                         <hr style={{ margin: '2rem 0 1.5rem 0', border: 'none', borderTop: '2px dashed #e2e8f0' }} />
-                        <h4 style={{ margin: '0 0 1rem 0', color: '#334155', fontSize: '16px' }}>My Past Tips</h4>
+                        <h4 style={{ margin: '0 0 1rem 0', color: '#334155', fontSize: '16px' }}>My Leave History</h4>
                         
-                        {loadingReports ? (
-                            <p style={{ color: '#64748b', fontSize: '14px' }}>Loading past tips...</p>
-                        ) : myReports.length === 0 ? (
-                            <p style={{ color: '#64748b', fontSize: '14px', fontStyle: 'italic' }}>You haven't submitted any tips yet.</p>
+                        {loadingLeaves ? (
+                            <p style={{ color: '#64748b', fontSize: '14px' }}>Loading past applications...</p>
+                        ) : myLeaves.length === 0 ? (
+                            <p style={{ color: '#64748b', fontSize: '14px', fontStyle: 'italic' }}>No leave applications found.</p>
                         ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                {myReports.map(report => {
-                                    const badge = getBadgeStyle(report.status);
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {myLeaves.map(leave => {
+                                    const badge = getBadgeStyle(leave.status);
                                     return (
-                                        <div key={report._id} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+                                        <div key={leave._id} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc', borderLeft: `4px solid ${badge.text}` }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                                                <strong style={{ color: '#0f172a', fontSize: '15px' }}>{report.title}</strong>
+                                                <strong style={{ color: '#0f172a', fontSize: '14px' }}>
+                                                    {new Date(leave.startDate).toLocaleDateString()} - {new Date(leave.endDate).toLocaleDateString()}
+                                                </strong>
                                                 <span style={{ backgroundColor: badge.bg, color: badge.text, padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
-                                                    {report.status}
+                                                    {leave.status}
                                                 </span>
                                             </div>
-                                            <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
-                                                Submitted on: {new Date(report.createdAt).toLocaleDateString()}
-                                            </p>
+                                            <p style={{ margin: '0 0 0.5rem 0', fontSize: '13px', color: '#475569' }}>{leave.reason}</p>
+                                            
+                                            {/* IMPORTANT: Shows the Headmaster's feedback if it exists! */}
+                                            {leave.adminFeedback && (
+                                                <div style={{ backgroundColor: 'white', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '12px', color: '#0f172a' }}>
+                                                    <strong>Headmaster's Note:</strong> {leave.adminFeedback}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
                             </div>
                         )}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
+                    <
