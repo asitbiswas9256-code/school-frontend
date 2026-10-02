@@ -60,7 +60,25 @@ export default function StudentDashboard() {
         if (activeTab === 'leave') fetchMyLeaves();
     }, [activeTab]);
 
-    const handleSubmitReport = async (e) => {
+        const handleSubmitLeave = async (e) => {
+        e.preventDefault();
+        if (!leaveStartDate || !leaveEndDate || !leaveReason) return setLeaveMessage('Please fill all fields.');
+        setIsSubmittingLeave(true); setLeaveMessage('Submitting...');
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/leaves/submit', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ startDate: leaveStartDate, endDate: leaveEndDate, reason: leaveReason })
+            });
+            const json = await res.json();
+            if (res.ok) {
+                setLeaveMessage('Success: Leave application submitted.');
+                setLeaveStartDate(''); setLeaveEndDate(''); setLeaveReason(''); fetchMyLeaves(); 
+            } else setLeaveMessage(`Backend Error: ${json.message || 'Failed to submit'}`);
+        } catch (err) { setLeaveMessage('Network error.'); }
+        setIsSubmittingLeave(false);
+    };
+    
         e.preventDefault();
         if (!reportTitle || !reportDescription) return setReportMessage('Please provide title and details.');
         setIsSubmitting(true); setReportMessage('Sending securely...');
