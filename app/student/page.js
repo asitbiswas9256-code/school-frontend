@@ -2,15 +2,18 @@
 import { useState, useEffect } from 'react';
 
 export default function StudentDashboard() {
-    const [activeTab, setActiveTab] = useState('records');
+    const [activeTab, setActiveTab] = useState('notices'); // Default to the new Notice Board!
+    
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
+    
     const [reportTitle, setReportTitle] = useState('');
     const [reportDescription, setReportDescription] = useState('');
     const [reportMessage, setReportMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [myReports, setMyReports] = useState([]);
     const [loadingReports, setLoadingReports] = useState(false);
+    
     const [leaveStartDate, setLeaveStartDate] = useState('');
     const [leaveEndDate, setLeaveEndDate] = useState('');
     const [leaveReason, setLeaveReason] = useState('');
@@ -19,6 +22,10 @@ export default function StudentDashboard() {
     const [myLeaves, setMyLeaves] = useState([]);
     const [loadingLeaves, setLoadingLeaves] = useState(false);
 
+    // NEW: Notice Board State
+    const [notices, setNotices] = useState([]);
+    const [loadingNotices, setLoadingNotices] = useState(false);
+
     const handleLogout = () => { localStorage.removeItem('token'); window.location.href = '/'; };
 
     useEffect(() => {
@@ -26,8 +33,9 @@ export default function StudentDashboard() {
             try {
                 const token = localStorage.getItem('token');
                 const res = await fetch('https://school-backend-szf6.onrender.com/api/student/profile', { headers: { 'Authorization': `Bearer ${token}` } });
-                const json = await res.json();
-                if (res.ok) setData(json); else setError(json.message);
+                let json = {};
+                try { json = await res.json(); } catch(e) {}
+                if (res.ok) setData(json); else setError(json.message || 'Error loading profile.');
             } catch (err) { setError('Network error.'); }
         };
         fetchProfile();
@@ -38,7 +46,8 @@ export default function StudentDashboard() {
         try {
             const token = localStorage.getItem('token');
             const res = await fetch('https://school-backend-szf6.onrender.com/api/reports/my-reports', { headers: { 'Authorization': `Bearer ${token}` } });
-            const json = await res.json();
+            let json = [];
+            try { json = await res.json(); } catch(e) {}
             if (res.ok) setMyReports(json);
         } catch (err) {}
         setLoadingReports(false);
@@ -49,15 +58,30 @@ export default function StudentDashboard() {
         try {
             const token = localStorage.getItem('token');
             const res = await fetch('https://school-backend-szf6.onrender.com/api/leaves/my-leaves', { headers: { 'Authorization': `Bearer ${token}` } });
-            const json = await res.json();
+            let json = [];
+            try { json = await res.json(); } catch(e) {}
             if (res.ok) setMyLeaves(json);
         } catch (err) {}
         setLoadingLeaves(false);
     };
 
+    // NEW: Fetch Notices Function
+    const fetchNotices = async () => {
+        setLoadingNotices(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/notices/all', { headers: { 'Authorization': `Bearer ${token}` } });
+            let json = [];
+            try { json = await res.json(); } catch(e) {}
+            if (res.ok) setNotices(json);
+        } catch (err) {}
+        setLoadingNotices(false);
+    };
+
     useEffect(() => {
         if (activeTab === 'report') fetchMyReports();
         if (activeTab === 'leave') fetchMyLeaves();
+        if (activeTab === 'notices') fetchNotices();
     }, [activeTab]);
 
     const handleSubmitReport = async (e) => {
@@ -70,10 +94,12 @@ export default function StudentDashboard() {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ title: reportTitle, description: reportDescription, evidenceUrl: '' })
             });
+            let json = {};
+            try { json = await res.json(); } catch(err) {}
             if (res.ok) {
                 setReportMessage('Success: Tip securely delivered.');
                 setReportTitle(''); setReportDescription(''); fetchMyReports();
-            } else setReportMessage('Error submitting.');
+            } else setReportMessage(`Backend Error: ${json.message || 'Failed to submit'}`);
         } catch (err) { setReportMessage('Network error.'); }
         setIsSubmitting(false);
     };
@@ -88,15 +114,13 @@ export default function StudentDashboard() {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ startDate: leaveStartDate, endDate: leaveEndDate, reason: leaveReason })
             });
-            
             let json = {};
             try { json = await res.json(); } catch(err) {}
-
             if (res.ok) {
                 setLeaveMessage('Success: Leave application submitted.');
                 setLeaveStartDate(''); setLeaveEndDate(''); setLeaveReason(''); fetchMyLeaves(); 
             } else {
-                setLeaveMessage(`Backend Error: ${json.message || res.statusText || 'Failed to submit'}`);
+                setLeaveMessage(`Backend Error: ${json.message || 'Failed to submit'}`);
             }
         } catch (err) { setLeaveMessage(`Network Error: ${err.message}`); }
         setIsSubmittingLeave(false);
@@ -117,15 +141,48 @@ export default function StudentDashboard() {
                     <button onClick={handleLogout} style={{ padding: '0.4rem 0.8rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Log Out</button>
                 </div>
 
+                {/* 4-Tab Navigation */}
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '1rem', flexWrap: 'wrap' }}>
-                    <button onClick={() => { setActiveTab('records'); setReportMessage(''); setLeaveMessage(''); }} style={{ flex: '1 1 30%', padding: '0.75rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'records' ? '#000080' : '#f1f5f9', color: activeTab === 'records' ? 'white' : '#475569', fontSize: '13px' }}>Records</button>
-                    <button onClick={() => { setActiveTab('leave'); setReportMessage(''); }} style={{ flex: '1 1 30%', padding: '0.75rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'leave' ? '#0f766e' : '#f1f5f9', color: activeTab === 'leave' ? 'white' : '#475569', fontSize: '13px' }}>Leave App</button>
-                    <button onClick={() => { setActiveTab('report'); setLeaveMessage(''); }} style={{ flex: '1 1 30%', padding: '0.75rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'report' ? '#b91c1c' : '#f1f5f9', color: activeTab === 'report' ? 'white' : '#475569', fontSize: '13px' }}>Under Zone</button>
+                    <button onClick={() => { setActiveTab('notices'); setReportMessage(''); setLeaveMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'notices' ? '#9333ea' : '#f1f5f9', color: activeTab === 'notices' ? 'white' : '#475569', fontSize: '12px' }}>Notices</button>
+                    <button onClick={() => { setActiveTab('records'); setReportMessage(''); setLeaveMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'records' ? '#000080' : '#f1f5f9', color: activeTab === 'records' ? 'white' : '#475569', fontSize: '12px' }}>Records</button>
+                    <button onClick={() => { setActiveTab('leave'); setReportMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'leave' ? '#0f766e' : '#f1f5f9', color: activeTab === 'leave' ? 'white' : '#475569', fontSize: '12px' }}>Leave App</button>
+                    <button onClick={() => { setActiveTab('report'); setLeaveMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'report' ? '#b91c1c' : '#f1f5f9', color: activeTab === 'report' ? 'white' : '#475569', fontSize: '12px' }}>Under Zone</button>
                 </div>
 
+                {/* TAB 1: NEW NOTICE BOARD */}
+                {activeTab === 'notices' && (
+                    <div>
+                        <div style={{ padding: '1rem', backgroundColor: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '8px', marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#7e22ce', fontSize: '16px' }}>School Notice Board</h3>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#6b21a8' }}>Official announcements and urgent logistics alerts.</p>
+                        </div>
+                        
+                        {loadingNotices ? <p style={{ textAlign: 'center', color: '#64748b' }}>Checking for updates...</p> : notices.length === 0 ? <p style={{ textAlign: 'center', color: '#64748b', fontStyle: 'italic' }}>No notices at this time.</p> : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {notices.map(notice => (
+                                    <div key={notice._id} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: notice.type === 'Logistics' ? '#fffbeb' : '#f8fafc', borderLeft: `4px solid ${notice.type === 'Logistics' ? '#f59e0b' : '#3b82f6'}` }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                                            <strong style={{ color: '#0f172a', fontSize: '15px' }}>{notice.title}</strong>
+                                            <span style={{ backgroundColor: notice.type === 'Logistics' ? '#fef3c7' : '#dbeafe', color: notice.type === 'Logistics' ? '#b45309' : '#1d4ed8', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{notice.type}</span>
+                                        </div>
+                                        <p style={{ margin: '0 0 0.75rem 0', fontSize: '12px', color: '#64748b' }}>By {notice.authorRole} • {new Date(notice.createdAt).toLocaleDateString()}</p>
+                                        <div style={{ margin: 0, fontSize: '14px', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: 'white', padding: '0.75rem', borderRadius: '6px', border: `1px solid ${notice.type === 'Logistics' ? '#fde68a' : '#bfdbfe'}` }}>
+                                            {notice.content}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* TAB 2: RECORDS */}
                 {activeTab === 'records' && (
                     <div>
-                        {error ? <div style={{ padding: '1rem', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '8px', textAlign: 'center', fontWeight: 'bold' }}>{error}</div> : !data ? <div style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>Fetching your live academic records...</div> : (
+                        {error ? <div style={{ padding: '1rem', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '8px', textAlign: 'center', fontWeight: 'bold' }}>{error}</div> 
+                        : !data ? <div style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>Fetching your live academic records...</div> 
+                        : !data.profile ? <div style={{ padding: '1.5rem', backgroundColor: '#fff7ed', color: '#c2410c', borderRadius: '8px', textAlign: 'center', border: '1px solid #ffedd5' }}><strong>Profile Pending:</strong> The Headmaster has not uploaded your academic records yet.</div>
+                        : (
                             <div>
                                 <div style={{ padding: '1.5rem', backgroundColor: '#e0e7ff', borderRadius: '8px', color: '#3730a3', marginBottom: '1.5rem' }}>
                                     <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '20px' }}>Welcome, {data.fullName}</h3>
@@ -157,6 +214,7 @@ export default function StudentDashboard() {
                     </div>
                 )}
 
+                {/* TAB 3: LEAVE APP */}
                 {activeTab === 'leave' && (
                     <div>
                         <div style={{ padding: '1rem', backgroundColor: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: '8px', marginBottom: '1.5rem' }}>
@@ -211,6 +269,7 @@ export default function StudentDashboard() {
                     </div>
                 )}
 
+                {/* TAB 4: UNDER ZONE */}
                 {activeTab === 'report' && (
                     <div>
                         <div style={{ padding: '1rem', backgroundColor: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', marginBottom: '1.5rem' }}>
