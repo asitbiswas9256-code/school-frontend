@@ -60,25 +60,7 @@ export default function StudentDashboard() {
         if (activeTab === 'leave') fetchMyLeaves();
     }, [activeTab]);
 
-        const handleSubmitLeave = async (e) => {
-        e.preventDefault();
-        if (!leaveStartDate || !leaveEndDate || !leaveReason) return setLeaveMessage('Please fill all fields.');
-        setIsSubmittingLeave(true); setLeaveMessage('Submitting...');
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/leaves/submit', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ startDate: leaveStartDate, endDate: leaveEndDate, reason: leaveReason })
-            });
-            const json = await res.json();
-            if (res.ok) {
-                setLeaveMessage('Success: Leave application submitted.');
-                setLeaveStartDate(''); setLeaveEndDate(''); setLeaveReason(''); fetchMyLeaves(); 
-            } else setLeaveMessage(`Backend Error: ${json.message || 'Failed to submit'}`);
-        } catch (err) { setLeaveMessage('Network error.'); }
-        setIsSubmittingLeave(false);
-    };
-    
+    const handleSubmitReport = async (e) => {
         e.preventDefault();
         if (!reportTitle || !reportDescription) return setReportMessage('Please provide title and details.');
         setIsSubmitting(true); setReportMessage('Sending securely...');
@@ -106,11 +88,17 @@ export default function StudentDashboard() {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ startDate: leaveStartDate, endDate: leaveEndDate, reason: leaveReason })
             });
+            
+            let json = {};
+            try { json = await res.json(); } catch(err) {}
+
             if (res.ok) {
                 setLeaveMessage('Success: Leave application submitted.');
                 setLeaveStartDate(''); setLeaveEndDate(''); setLeaveReason(''); fetchMyLeaves(); 
-            } else setLeaveMessage('Error submitting.');
-        } catch (err) { setLeaveMessage('Network error.'); }
+            } else {
+                setLeaveMessage(`Backend Error: ${json.message || res.statusText || 'Failed to submit'}`);
+            }
+        } catch (err) { setLeaveMessage(`Network Error: ${err.message}`); }
         setIsSubmittingLeave(false);
     };
 
@@ -120,7 +108,8 @@ export default function StudentDashboard() {
         if (status === 'Rejected') return { bg: '#fee2e2', text: '#9f1239' };
         return { bg: '#e2e8f0', text: '#334155' }; 
     };
-            return (
+
+    return (
         <div style={{ minHeight: '100vh', padding: '2rem 1rem', backgroundColor: '#f8fafc', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
             <div style={{ maxWidth: '600px', margin: '0 auto', backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -167,7 +156,8 @@ export default function StudentDashboard() {
                         )}
                     </div>
                 )}
-                                                           {activeTab === 'leave' && (
+
+                {activeTab === 'leave' && (
                     <div>
                         <div style={{ padding: '1rem', backgroundColor: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: '8px', marginBottom: '1.5rem' }}>
                             <h3 style={{ margin: '0 0 0.5rem 0', color: '#0f766e', fontSize: '16px' }}>Leave Application</h3>
@@ -266,5 +256,4 @@ export default function StudentDashboard() {
             </div>
         </div>
     );
-                            }
-                                   
+}
