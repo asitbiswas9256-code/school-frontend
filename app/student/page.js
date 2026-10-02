@@ -300,7 +300,7 @@ export default function StudentDashboard() {
                                             </div>
                                             <p style={{ margin: '0 0 0.5rem 0', fontSize: '13px', color: '#475569' }}>{leave.reason}</p>
                                             
-                                            {/* IMPORTANT: Shows the Headmaster's feedback if it exists! */}
+                                            {/* Shows the Headmaster's feedback if it exists! */}
                                             {leave.adminFeedback && (
                                                 <div style={{ backgroundColor: 'white', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '12px', color: '#0f172a' }}>
                                                     <strong>Headmaster's Note:</strong> {leave.adminFeedback}
@@ -311,4 +311,5 @@ export default function StudentDashboard() {
                                 })}
                             </div>
                         )}
-                    <
+                    </div>
+     
