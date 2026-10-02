@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 
 export default function AdminPage() {
-    const [activeTab, setActiveTab] = useState('broadcast'); // Default to the new Megaphone!
+    const [activeTab, setActiveTab] = useState('broadcast');
     const [role, setRole] = useState('Assistant Headmaster');
     const [newId, setNewId] = useState('');
     const [message, setMessage] = useState('');
@@ -19,6 +19,10 @@ export default function AdminPage() {
     const [noticeContent, setNoticeContent] = useState('');
     const [noticeType, setNoticeType] = useState('Notice');
     const [isPublishing, setIsPublishing] = useState(false);
+    
+    // NEW: Broadcast History State
+    const [notices, setNotices] = useState([]);
+    const [loadingNotices, setLoadingNotices] = useState(false);
 
     const handleLogout = () => { localStorage.removeItem('token'); window.location.href = '/'; };
 
@@ -88,6 +92,19 @@ export default function AdminPage() {
         } catch (err) { setMessage('Error updating leave.'); }
     };
 
+    // NEW: Fetch Broadcast History
+    const fetchNotices = async () => {
+        setLoadingNotices(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/notices/all', { headers: { 'Authorization': `Bearer ${token}` } });
+            let json = [];
+            try { json = await res.json(); } catch(e) {}
+            if (res.ok) setNotices(json);
+        } catch (err) {}
+        setLoadingNotices(false);
+    };
+
     const handlePublish = async (e) => {
         e.preventDefault();
         if (!noticeTitle || !noticeContent) return setMessage('Title and content required.');
@@ -102,6 +119,7 @@ export default function AdminPage() {
             if (res.ok) {
                 setMessage('Success: Announcement published!');
                 setNoticeTitle(''); setNoticeContent('');
+                fetchNotices(); // Instantly update the history list!
             } else setMessage(`Error: ${data.message || 'Failed'}`);
         } catch (err) { setMessage('Network Error'); }
         setIsPublishing(false);
@@ -110,6 +128,7 @@ export default function AdminPage() {
     useEffect(() => {
         if (activeTab === 'reports') fetchReports();
         if (activeTab === 'leaves') fetchLeaves();
+        if (activeTab === 'broadcast') fetchNotices(); // Fetch notices when tab opens
     }, [activeTab]);
 
     const getBadgeStyle = (status) => {
@@ -127,7 +146,6 @@ export default function AdminPage() {
                     <button onClick={handleLogout} style={{ padding: '0.4rem 0.8rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Log Out</button>
                 </div>
 
-                {/* 4-Tab Navigation */}
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '1rem', flexWrap: 'wrap' }}>
                     <button onClick={() => { setActiveTab('broadcast'); setMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'broadcast' ? '#9333ea' : '#f1f5f9', color: activeTab === 'broadcast' ? 'white' : '#475569', fontSize: '12px' }}>Broadcast</button>
                     <button onClick={() => { setActiveTab('leaves'); setMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'leaves' ? '#0f766e' : '#f1f5f9', color: activeTab === 'leaves' ? 'white' : '#475569', fontSize: '12px' }}>Leaves</button>
@@ -137,7 +155,7 @@ export default function AdminPage() {
 
                 {message && <div style={{ padding: '0.75rem', marginBottom: '1.5rem', backgroundColor: message.includes('Success') || message.includes('marked') || message.includes('Approved') || message.includes('Rejected') ? '#dcfce7' : '#fee2e2', color: message.includes('Error') ? '#b91c1c' : '#166534', borderRadius: '6px', textAlign: 'center', fontSize: '14px', fontWeight: 'bold' }}>{message}</div>}
 
-                {/* TAB 1: NEW BROADCAST SYSTEM */}
+                {/* TAB 1: UPDATED BROADCAST SYSTEM WITH HISTORY */}
                 {activeTab === 'broadcast' && (
                     <div>
                         <div style={{ padding: '1rem', backgroundColor: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '8px', marginBottom: '1.5rem' }}>
@@ -164,6 +182,26 @@ export default function AdminPage() {
                                 {isPublishing ? 'Publishing...' : 'Broadcast to School'}
                             </button>
                         </form>
+
+                        {/* NEW: Broadcast History Section */}
+                        <hr style={{ margin: '2rem 0 1.5rem 0', border: 'none', borderTop: '2px dashed #e2e8f0' }} />
+                        <h4 style={{ margin: '0 0 1rem 0', color: '#334155', fontSize: '16px' }}>Broadcast History</h4>
+                        {loadingNotices ? <p style={{ textAlign: 'center', color: '#64748b', fontSize: '14px' }}>Loading history...</p> : notices.length === 0 ? <p style={{ textAlign: 'center', color: '#64748b', fontSize: '14px', fontStyle: 'italic' }}>No notices published yet.</p> : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {notices.map(notice => (
+                                    <div key={notice._id} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: notice.type === 'Logistics' ? '#fffbeb' : '#f8fafc', borderLeft: `4px solid ${notice.type === 'Logistics' ? '#f59e0b' : '#3b82f6'}` }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                                            <strong style={{ color: '#0f172a', fontSize: '15px' }}>{notice.title}</strong>
+                                            <span style={{ backgroundColor: notice.type === 'Logistics' ? '#fef3c7' : '#dbeafe', color: notice.type === 'Logistics' ? '#b45309' : '#1d4ed8', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{notice.type}</span>
+                                        </div>
+                                        <p style={{ margin: '0 0 0.75rem 0', fontSize: '12px', color: '#64748b' }}>By {notice.authorRole} • {new Date(notice.createdAt).toLocaleDateString()}</p>
+                                        <div style={{ margin: 0, fontSize: '14px', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: 'white', padding: '0.75rem', borderRadius: '6px', border: `1px solid ${notice.type === 'Logistics' ? '#fde68a' : '#bfdbfe'}` }}>
+                                            {notice.content}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
