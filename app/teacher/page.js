@@ -20,6 +20,7 @@ export default function TeacherPortal() {
     const [activeCommentLesson, setActiveCommentLesson] = useState(null);
     const [commentText, setCommentText] = useState('');
 
+    // Temporary static info (to be replaced by local storage token data later)
     const teacherId = "teacher123"; 
     const teacherName = "Prof. Smith";
 
@@ -50,7 +51,6 @@ export default function TeacherPortal() {
         const xhr = new XMLHttpRequest();
         setXhrRequest(xhr);
 
-        // Track Progress for MB/GB and %
         xhr.upload.addEventListener('progress', (event) => {
             if (event.lengthComputable) {
                 const percent = Math.round((event.loaded * 100) / event.total);
@@ -58,13 +58,8 @@ export default function TeacherPortal() {
                 let totalMB = (event.total / (1024 * 1024)).toFixed(2);
                 let unit = 'MB';
 
-                if (totalMB > 1024) {
-                    totalMB = (totalMB / 1024).toFixed(2);
-                    unit = 'GB';
-                }
-
-                setUploadProgress(percent);
-                setUploadStats(`${loadedMB} MB / ${totalMB} ${unit}`);
+                if (totalMB > 1024) { totalMB = (totalMB / 1024).toFixed(2); unit = 'GB'; }
+                setUploadProgress(percent); setUploadStats(`${loadedMB} MB / ${totalMB} ${unit}`);
             }
         });
 
@@ -74,29 +69,18 @@ export default function TeacherPortal() {
                 setSubject(''); setTitle(''); setContent(''); setYoutubeLink(''); setMediaFile(null);
                 document.getElementById('file-upload').value = '';
                 fetchLessons();
-            } else {
-                setMessage('Upload failed. Server responded with an error.');
-            }
+            } else { setMessage('Upload failed. Server responded with an error.'); }
             setIsUploading(false); setXhrRequest(null);
         });
 
-        xhr.addEventListener('error', () => {
-            setMessage('Network Error during upload.');
-            setIsUploading(false); setXhrRequest(null);
-        });
-
-        xhr.addEventListener('abort', () => {
-            setMessage('Upload canceled by user.');
-            setIsUploading(false); setXhrRequest(null); setUploadProgress(0); setUploadStats('');
-        });
+        xhr.addEventListener('error', () => { setMessage('Network Error during upload.'); setIsUploading(false); setXhrRequest(null); });
+        xhr.addEventListener('abort', () => { setMessage('Upload canceled by user.'); setIsUploading(false); setXhrRequest(null); setUploadProgress(0); setUploadStats(''); });
 
         xhr.open('POST', 'https://school-backend-szf6.onrender.com/api/lessons/publish');
         xhr.send(formData);
     };
 
-    const cancelUpload = () => {
-        if (xhrRequest) xhrRequest.abort();
-    };
+    const cancelUpload = () => { if (xhrRequest) xhrRequest.abort(); };
 
     const handleDelete = async (id) => {
         if (!window.confirm('Are you sure you want to delete this lesson permanently?')) return;
@@ -104,6 +88,27 @@ export default function TeacherPortal() {
             const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}`, { method: 'DELETE' });
             if (res.ok) { setMessage('Lesson deleted.'); fetchLessons(); }
         } catch (err) { setMessage('Failed to delete lesson.'); }
+    };
+
+    const handleLike = async (id) => {
+        try {
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}/like`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: teacherId })
+            });
+            if (res.ok) fetchLessons();
+        } catch (err) { console.error('Failed to like lesson'); }
+    };
+
+    const handleComment = async (id) => {
+        if (!commentText) return;
+        try {
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}/comment`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: teacherId, fullName: teacherName, text: commentText })
+            });
+            if (res.ok) { setCommentText(''); setActiveCommentLesson(null); fetchLessons(); }
+        } catch (err) { console.error('Failed to post comment'); }
     };
 
     const handleShare = (lesson) => {
@@ -154,12 +159,10 @@ export default function TeacherPortal() {
                         <input type="text" value={youtubeLink} onChange={(e) => setYoutubeLink(e.target.value)} placeholder="https://youtube.com/..." style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginTop: '0.5rem' }} disabled={isUploading} />
                     </div>
 
-                    {/* DYNAMIC PROGRESS BAR & CANCEL BUTTON */}
                     {isUploading ? (
                         <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '14px', fontWeight: 'bold', color: '#334155' }}>
-                                <span>Uploading... {uploadProgress}%</span>
-                                <span>{uploadStats}</span>
+                                <span>Uploading... {uploadProgress}%</span><span>{uploadStats}</span>
                             </div>
                             <div style={{ width: '100%', backgroundColor: '#e2e8f0', borderRadius: '99px', height: '10px', overflow: 'hidden', marginBottom: '1rem' }}>
                                 <div style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: '#0ea5e9', transition: 'width 0.2s ease' }}></div>
@@ -167,9 +170,7 @@ export default function TeacherPortal() {
                             <button type="button" onClick={cancelUpload} style={{ padding: '0.6rem 1.5rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Cancel Upload</button>
                         </div>
                     ) : (
-                        <button type="submit" style={{ padding: '0.85rem 2rem', backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>
-                            Publish Lesson
-                        </button>
+                        <button type="submit" style={{ padding: '0.85rem 2rem', backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>Publish Lesson</button>
                     )}
                 </form>
 
@@ -178,7 +179,16 @@ export default function TeacherPortal() {
                     {lessons.length === 0 ? <p style={{ color: '#64748b' }}>No lessons published yet.</p> : null}
                     {lessons.map(lesson => (
                         <div key={lesson._id} style={{ padding: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
-                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#0ea5e9' }}>{lesson.title} <span style={{ fontSize: '14px', color: '#64748b' }}>({lesson.subject})</span></h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div>
+                                    <h3 style={{ margin: '0 0 0.5rem 0', color: '#0ea5e9' }}>{lesson.title} <span style={{ fontSize: '14px', color: '#64748b' }}>({lesson.subject})</span></h3>
+                                    <p style={{ margin: '0 0 1rem 0', fontSize: '12px', color: '#94a3b8' }}>Posted by {lesson.teacherName}</p>
+                                </div>
+                                {lesson.teacherId === teacherId && (
+                                    <button onClick={() => handleDelete(lesson._id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold' }}>🗑️ Delete</button>
+                                )}
+                            </div>
+
                             <p style={{ margin: '0 0 1rem 0', fontSize: '14px', whiteSpace: 'pre-wrap', color: '#334155' }}>{lesson.content}</p>
                             
                             {lesson.youtubeLink && (
@@ -189,18 +199,32 @@ export default function TeacherPortal() {
                             )}
 
                             {/* SOCIAL TOOLBAR */}
-                            <div style={{ display: 'flex', gap: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '1rem' }}>
-                                <button style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>❤️ Like</button>
-                                <button onClick={() => setActiveCommentLesson(activeCommentLesson === lesson._id ? null : lesson._id)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>💬 Comment</button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '1rem' }}>
+                                <button onClick={() => handleLike(lesson._id)} style={{ background: 'none', border: 'none', color: lesson.likes?.includes(teacherId) ? '#ef4444' : '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>
+                                    {lesson.likes?.includes(teacherId) ? '❤️ Liked' : '🤍 Like'} ({lesson.likes?.length || 0})
+                                </button>
+                                <button onClick={() => setActiveCommentLesson(activeCommentLesson === lesson._id ? null : lesson._id)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>💬 Comment ({lesson.comments?.length || 0})</button>
                                 <button onClick={() => handleShare(lesson)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>🔗 Share</button>
-                                <button onClick={() => handleDelete(lesson._id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>🗑️ Delete</button>
                             </div>
 
                             {/* COMMENT BOX UI */}
                             {activeCommentLesson === lesson._id && (
                                 <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
                                     <input type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Write a review or question..." style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-                                    <button style={{ padding: '0.6rem 1rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}>Post</button>
+                                    <button onClick={() => handleComment(lesson._id)} style={{ padding: '0.6rem 1rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Post</button>
+                                </div>
+                            )}
+
+                            {/* RENDER COMMENTS */}
+                            {lesson.comments && lesson.comments.length > 0 && (
+                                <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f1f5f9', borderRadius: '8px' }}>
+                                    <h4 style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b' }}>Discussion</h4>
+                                    {lesson.comments.map((comment, index) => (
+                                        <div key={index} style={{ marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: index < lesson.comments.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                                            <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#334155' }}>{comment.fullName}: </span>
+                                            <span style={{ fontSize: '13px', color: '#475569' }}>{comment.text}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
