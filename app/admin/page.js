@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 
 export default function AdminPortal() {
-    const [activeTab, setActiveTab] = useState('studio'); // Restored default tab to Studio
+    const [activeTab, setActiveTab] = useState('profile');
     
     // 1. LIVE AUTHENTICATION STATES
     const [adminId, setAdminId] = useState('');
@@ -17,8 +17,13 @@ export default function AdminPortal() {
     const [myEmail, setMyEmail] = useState('');
     const [myDob, setMyDob] = useState('');
     const [myBloodGroup, setMyBloodGroup] = useState('');
+    
+    // NEW: 2-Step Password States
     const [oldPass, setOldPass] = useState('');
     const [newPass, setNewPass] = useState('');
+    const [otpCode, setOtpCode] = useState('');
+    const [showOtpField, setShowOtpField] = useState(false);
+    
     const [newAdminIdInput, setNewAdminIdInput] = useState('');
     const [profileMessage, setProfileMessage] = useState({ text: '', type: '' });
 
@@ -26,7 +31,7 @@ export default function AdminPortal() {
     const [editingStudent, setEditingStudent] = useState(null);
     const [editStudentData, setEditStudentData] = useState({ fullName: '', currentClass: '', rollNo: '', dob: '', bloodGroup: '' });
 
-    // 5. OPERATIONS STATES
+    // 5. OPERATIONS & STUDIO STATES
     const [newUserId, setNewUserId] = useState('');
     const [newUserRole, setNewUserRole] = useState('Student');
     const [genMessage, setGenMessage] = useState('');
@@ -39,7 +44,6 @@ export default function AdminPortal() {
     const [attRoll, setAttRoll] = useState('');
     const [attPercent, setAttPercent] = useState(100);
     
-    // 6. STUDIO STATES (RESTORED!)
     const [subject, setSubject] = useState('');
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
@@ -60,13 +64,8 @@ export default function AdminPortal() {
         fetchLessons(); fetchUsers(); fetchMyProfile(localStorage.getItem('userId'));
     }, []);
 
-    // --- DATA FETCHING ---
-    const fetchLessons = async () => {
-        try { const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons?t=${Date.now()}`); if (res.ok) setLessons(await res.json()); } catch (err) {}
-    };
-    const fetchUsers = async () => {
-        try { const res = await fetch(`https://school-backend-szf6.onrender.com/api/admin/users?t=${Date.now()}`); if (res.ok) setUsers(await res.json()); } catch (err) {}
-    };
+    const fetchLessons = async () => { try { const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons?t=${Date.now()}`); if (res.ok) setLessons(await res.json()); } catch (err) {} };
+    const fetchUsers = async () => { try { const res = await fetch(`https://school-backend-szf6.onrender.com/api/admin/users?t=${Date.now()}`); if (res.ok) setUsers(await res.json()); } catch (err) {} };
     const fetchMyProfile = async (id) => {
         try { 
             const res = await fetch(`https://school-backend-szf6.onrender.com/api/school/search?query=${id}`); 
@@ -77,7 +76,7 @@ export default function AdminPortal() {
         } catch (err) {}
     };
 
-    // --- PROFILE & SETTINGS LOGIC ---
+    // --- SECURE PROFILE LOGIC ---
     const handleUpdatePersonalDetails = async (e) => {
         e.preventDefault();
         try {
@@ -88,27 +87,49 @@ export default function AdminPortal() {
             if (res.ok) setProfileMessage({ text: 'Personal details saved!', type: 'success' });
         } catch (err) { setProfileMessage({ text: 'Failed to update details.', type: 'error' }); }
     };
+    
+    // FIXED EMAIL UPDATE
     const handleUpdateEmail = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch(`https://school-backend-szf6.onrender.com/api/admin/update-email`, {
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/profile/update-email`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: adminId, email: myEmail })
             });
-            if (res.ok) setProfileMessage({ text: 'Recovery Email saved!', type: 'success' });
-        } catch (err) { setProfileMessage({ text: 'Failed to save email.', type: 'error' }); }
+            if (res.ok) setProfileMessage({ text: 'Recovery Email saved securely!', type: 'success' });
+            else setProfileMessage({ text: 'Failed to save email.', type: 'error' });
+        } catch (err) { setProfileMessage({ text: 'Network error while saving email.', type: 'error' }); }
     };
-    const handleChangePassword = async (e) => {
+
+    // SECURE 2-STEP PASSWORD LOGIC
+    const handleRequestPasswordChange = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/profile/change-password', {
-                method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: adminId, currentPassword: oldPass, newPassword: newPass })
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/profile/request-password-change', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: adminId, currentPassword: oldPass })
             });
             const data = await res.json();
-            if (res.ok) { setProfileMessage({ text: 'Password changed securely.', type: 'success' }); setOldPass(''); setNewPass(''); }
+            if (res.ok) { setProfileMessage({ text: 'Security OTP sent to your email! Please enter it below.', type: 'success' }); setShowOtpField(true); }
             else setProfileMessage({ text: data.message, type: 'error' });
         } catch (err) { setProfileMessage({ text: 'Network error.', type: 'error' }); }
     };
+
+    const handleVerifyPasswordChange = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/profile/verify-password-change', {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: adminId, otpCode, newPassword: newPass })
+            });
+            const data = await res.json();
+            if (res.ok) { 
+                setProfileMessage({ text: 'Password successfully changed and secured!', type: 'success' }); 
+                setOldPass(''); setNewPass(''); setOtpCode(''); setShowOtpField(false); 
+            }
+            else setProfileMessage({ text: data.message, type: 'error' });
+        } catch (err) { setProfileMessage({ text: 'Network error.', type: 'error' }); }
+    };
+
     const handleChangeAdminId = async (e) => {
         e.preventDefault();
         if (!window.confirm("WARNING: Changing your Admin ID will require you to log back in immediately. Continue?")) return;
@@ -124,22 +145,18 @@ export default function AdminPortal() {
     };
 
     // --- STUDENT EDIT LOGIC ---
-    const startEditingStudent = (user) => {
-        setEditingStudent(user.userId);
-        setEditStudentData({ fullName: user.fullName, currentClass: '', rollNo: '', dob: user.dob || '', bloodGroup: user.bloodGroup || '' });
-    };
+    const startEditingStudent = (user) => { setEditingStudent(user.userId); setEditStudentData({ fullName: user.fullName, currentClass: '', rollNo: '', dob: user.dob || '', bloodGroup: user.bloodGroup || '' }); };
     const submitStudentEdit = async (e) => {
         e.preventDefault();
         try {
             const res = await fetch(`https://school-backend-szf6.onrender.com/api/profile/edit-student/${editingStudent}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editStudentData)
             });
-            if (res.ok) { alert("Student updated!"); setEditingStudent(null); fetchUsers(); }
-            else alert("Update failed.");
+            if (res.ok) { alert("Student updated!"); setEditingStudent(null); fetchUsers(); } else alert("Update failed.");
         } catch (err) { alert("Network Error."); }
     };
 
-    // --- STUDIO & OPERATIONS LOGIC (RESTORED!) ---
+    // --- STUDIO & OPERATIONS LOGIC ---
     const handlePublish = (e) => {
         e.preventDefault();
         if (!title || !content) return setMessage('Title and Content required.');
@@ -150,21 +167,12 @@ export default function AdminPortal() {
         formData.append('title', title); formData.append('content', content);
         formData.append('targetClass', targetClass);
         if (mediaFile) formData.append('mediaFile', mediaFile);
-
         const xhr = new XMLHttpRequest();
-        xhr.addEventListener('load', () => {
-            if (xhr.status === 201) { setMessage('Published successfully.'); setTitle(''); setContent(''); setSubject(''); fetchLessons(); } 
-            else setMessage('Upload failed.');
-            setIsUploading(false);
-        });
+        xhr.addEventListener('load', () => { if (xhr.status === 201) { setMessage('Published successfully.'); setTitle(''); setContent(''); setSubject(''); fetchLessons(); } else setMessage('Upload failed.'); setIsUploading(false); });
         xhr.open('POST', 'https://school-backend-szf6.onrender.com/api/lessons/publish');
         xhr.send(formData);
     };
-    const handleDeleteLesson = async (id, postRole) => {
-        if (adminRole !== 'Headmaster' && postRole === 'Headmaster') return alert("Access Denied.");
-        if (!window.confirm('Delete this post permanently?')) return;
-        try { const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}`, { method: 'DELETE' }); if (res.ok) fetchLessons(); } catch (err) { alert('Failed to delete.'); }
-    };
+    const handleDeleteLesson = async (id, postRole) => { if (adminRole !== 'Headmaster' && postRole === 'Headmaster') return alert("Access Denied."); if (!window.confirm('Delete this post permanently?')) return; try { const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}`, { method: 'DELETE' }); if (res.ok) fetchLessons(); } catch (err) { alert('Failed to delete.'); } };
     const handleSearch = async (e) => { e.preventDefault(); try { const res = await fetch(`https://school-backend-szf6.onrender.com/api/school/search?query=${searchQuery}`); if (res.ok) setSearchResults(await res.json()); } catch (err) {} };
     const handleGenerateId = async (e) => { e.preventDefault(); try { const res = await fetch('https://school-backend-szf6.onrender.com/api/admin/generate-id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: newUserId, role: newUserRole }) }); const data = await res.json(); setGenMessage(data.message); if (res.ok) { setNewUserId(''); fetchUsers(); } } catch (err) {} };
     const handlePostUrgentNotice = async (e) => { e.preventDefault(); try { const res = await fetch(`https://school-backend-szf6.onrender.com/api/school/notices`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: noticeTitle, content: noticeContent, type: 'Notice', authorId: adminId, authorName: adminName, isUrgent: true }) }); if (res.ok) { alert("Urgent Notice Pinned!"); setNoticeTitle(''); setNoticeContent(''); } } catch (err) { alert("Failed to post notice."); } };
@@ -176,7 +184,6 @@ export default function AdminPortal() {
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f1f5f9', fontFamily: 'sans-serif' }}>
-            {/* FULL NAVIGATION BAR RESTORED */}
             <div style={{ backgroundColor: '#0f172a', color: 'white', padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100 }}>
                 <h1 style={{ margin: 0, fontSize: '20px', color: '#38bdf8' }}>{adminRole} Console</h1>
                 <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto' }}>
@@ -190,7 +197,7 @@ export default function AdminPortal() {
 
             <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '0 1rem' }}>
 
-                {/* 1. GLOBAL STUDIO TAB (RESTORED!) */}
+                {/* 1. GLOBAL STUDIO TAB */}
                 {activeTab === 'studio' && (
                     <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                         <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>Publish Official Media</h2>
@@ -245,28 +252,26 @@ export default function AdminPortal() {
                                 </div>
                             )}
                         </div>
-
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                             <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                                 <h2 style={{ color: '#0f172a', margin: '0 0 0.5rem 0' }}>Offline Attendance</h2>
                                 <form onSubmit={handleAttendanceSubmit}>
-                                    <input type="text" value={attStudentId} onChange={(e) => setAttStudentId(e.target.value)} placeholder="Student ID (e.g., stu123)" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                                    <input type="text" value={attStudentId} onChange={(e) => setAttStudentId(e.target.value)} placeholder="Student ID" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
                                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
                                         <input type="text" value={attClass} onChange={(e) => setAttClass(e.target.value)} placeholder="Class" required style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-                                        <input type="text" value={attRoll} onChange={(e) => setAttRoll(e.target.value)} placeholder="Roll No" required style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                                        <input type="text" value={attRoll} onChange={(e) => setAttRoll(e.target.value)} placeholder="Roll" required style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
                                     </div>
                                     <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Percentage: {attPercent}%</label>
                                     <input type="range" min="1" max="100" value={attPercent} onChange={(e) => setAttPercent(e.target.value)} style={{ width: '100%', marginBottom: '1.5rem' }} />
-                                    <button type="submit" style={{ width: '100%', padding: '0.8rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Update Attendance</button>
+                                    <button type="submit" style={{ width: '100%', padding: '0.8rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Update</button>
                                 </form>
                             </div>
-
                             <div style={{ backgroundColor: '#fee2e2', padding: '2rem', borderRadius: '12px', border: '2px solid #f87171' }}>
                                 <h2 style={{ color: '#9f1239', margin: '0 0 0.5rem 0' }}>Urgent Notice</h2>
                                 <form onSubmit={handlePostUrgentNotice}>
-                                    <input type="text" value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)} placeholder="Urgent Title..." required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #fca5a5' }} />
-                                    <textarea value={noticeContent} onChange={(e) => setNoticeContent(e.target.value)} placeholder="Important details..." rows="3" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #fca5a5' }}></textarea>
-                                    <button type="submit" style={{ width: '100%', padding: '0.8rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Broadcast Alert</button>
+                                    <input type="text" value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)} placeholder="Title" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #fca5a5' }} />
+                                    <textarea value={noticeContent} onChange={(e) => setNoticeContent(e.target.value)} placeholder="Details..." rows="3" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #fca5a5' }}></textarea>
+                                    <button type="submit" style={{ width: '100%', padding: '0.8rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Broadcast</button>
                                 </form>
                             </div>
                         </div>
@@ -287,7 +292,6 @@ export default function AdminPortal() {
                                 <button type="submit" style={{ padding: '0.75rem 2rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Generate</button>
                             </form>
                         </div>
-                        
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
@@ -305,7 +309,7 @@ export default function AdminPortal() {
                                         </td>
                                         <td style={{ padding: '1rem', textAlign: 'center' }}>
                                             {user.role === 'Student' && (
-                                                <button onClick={() => startEditingStudent(user)} style={{ padding: '0.4rem 0.8rem', backgroundColor: '#f1f5f9', color: '#0369a1', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>Edit Student</button>
+                                                <button onClick={() => startEditingStudent(user)} style={{ padding: '0.4rem 0.8rem', backgroundColor: '#f1f5f9', color: '#0369a1', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>Edit</button>
                                             )}
                                         </td>
                                         <td style={{ padding: '1rem', textAlign: 'center' }}>
@@ -319,23 +323,15 @@ export default function AdminPortal() {
                                 ))}
                             </tbody>
                         </table>
-
                         {editingStudent && (
                             <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
                                 <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', width: '90%', maxWidth: '400px' }}>
                                     <h3 style={{ margin: '0 0 1rem 0', color: '#0f172a' }}>Edit Student Profile</h3>
                                     <form onSubmit={submitStudentEdit}>
-                                        <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Full Name:</label>
                                         <input type="text" value={editStudentData.fullName} onChange={(e) => setEditStudentData({...editStudentData, fullName: e.target.value})} style={{ width: '100%', padding: '0.6rem', marginBottom: '1rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                                            <div>
-                                                <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Class:</label>
-                                                <input type="text" value={editStudentData.currentClass} onChange={(e) => setEditStudentData({...editStudentData, currentClass: e.target.value})} style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-                                            </div>
-                                            <div>
-                                                <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Roll No:</label>
-                                                <input type="text" value={editStudentData.rollNo} onChange={(e) => setEditStudentData({...editStudentData, rollNo: e.target.value})} style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-                                            </div>
+                                            <input type="text" value={editStudentData.currentClass} onChange={(e) => setEditStudentData({...editStudentData, currentClass: e.target.value})} placeholder="Class" style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                                            <input type="text" value={editStudentData.rollNo} onChange={(e) => setEditStudentData({...editStudentData, rollNo: e.target.value})} placeholder="Roll No" style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
                                         </div>
                                         <button type="submit" style={{ width: '100%', padding: '0.8rem', backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '0.5rem' }}>Save Changes</button>
                                         <button type="button" onClick={() => setEditingStudent(null)} style={{ width: '100%', padding: '0.8rem', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
@@ -346,7 +342,7 @@ export default function AdminPortal() {
                     </div>
                 )}
 
-                {/* 4. PROFILE SETTINGS TAB */}
+                {/* 4. ULTIMATE SECURE PROFILE SETTINGS TAB */}
                 {activeTab === 'profile' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                         {profileMessage.text && (
@@ -372,6 +368,8 @@ export default function AdminPortal() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                                 <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                                     <h3 style={{ color: '#0f172a', margin: '0 0 1rem 0' }}>Security & Recovery</h3>
+                                    
+                                    {/* FIXED EMAIL FORM */}
                                     <form onSubmit={handleUpdateEmail} style={{ marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid #e2e8f0' }}>
                                         <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '14px' }}>Recovery Email:</label>
                                         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -379,12 +377,24 @@ export default function AdminPortal() {
                                             <button type="submit" style={{ padding: '0.75rem 1rem', backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Update</button>
                                         </div>
                                     </form>
-                                    <form onSubmit={handleChangePassword}>
-                                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '14px' }}>Change Password:</label>
-                                        <input type="password" value={oldPass} onChange={(e) => setOldPass(e.target.value)} placeholder="Current Password" required style={{ width: '100%', padding: '0.75rem', marginBottom: '0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-                                        <input type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="New Password" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-                                        <button type="submit" style={{ width: '100%', padding: '0.8rem', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Update Password</button>
-                                    </form>
+
+                                    {/* NEW: 2-STEP PASSWORD CHANGE FORM */}
+                                    {!showOtpField ? (
+                                        <form onSubmit={handleRequestPasswordChange}>
+                                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '14px' }}>Change Password:</label>
+                                            <input type="password" value={oldPass} onChange={(e) => setOldPass(e.target.value)} placeholder="Enter Current Password" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                                            <button type="submit" style={{ width: '100%', padding: '0.8rem', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Send Security OTP to Email</button>
+                                        </form>
+                                    ) : (
+                                        <form onSubmit={handleVerifyPasswordChange} style={{ backgroundColor: '#f0fdf4', padding: '1.5rem', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#166534' }}>Enter OTP from Email:</label>
+                                            <input type="text" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="6-digit code" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #86efac', textAlign: 'center', letterSpacing: '2px', fontSize: '16px' }} />
+                                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#166534' }}>Create New Password:</label>
+                                            <input type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="New Password" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #86efac' }} />
+                                            <button type="submit" style={{ width: '100%', padding: '0.8rem', backgroundColor: '#166534', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Verify & Change Password</button>
+                                            <p onClick={() => setShowOtpField(false)} style={{ textAlign: 'center', fontSize: '12px', color: '#64748b', cursor: 'pointer', marginTop: '1rem' }}>Cancel</p>
+                                        </form>
+                                    )}
                                 </div>
 
                                 {adminRole === 'Headmaster' && (
