@@ -2,15 +2,12 @@
 import { useState, useEffect } from 'react';
 
 export default function AdminPortal() {
-    // 1. TOP-LEVEL & AUTH STATES
-    const [activeTab, setActiveTab] = useState('operations'); // 'operations', 'studio', 'users', 'profile'
+    const [activeTab, setActiveTab] = useState('operations');
     
-    // Auth Simulation (In a live app, this comes from the login token)
-    const adminId = "admin01"; 
-    const adminName = "Principal Smith";
-    
-    // GOD-MODE TOGGLE: Change this to 'Assistant Headmaster' to see the restricted permissions!
-    const adminRole = "Headmaster"; 
+    // 1. LIVE AUTHENTICATION STATES
+    const [adminId, setAdminId] = useState('');
+    const [adminName, setAdminName] = useState('');
+    const [adminRole, setAdminRole] = useState('');
     
     const [myEmail, setMyEmail] = useState('');
     const [profileMessage, setProfileMessage] = useState('');
@@ -19,19 +16,22 @@ export default function AdminPortal() {
     const [users, setUsers] = useState([]);
     const [lessons, setLessons] = useState([]);
     
-    // 3. OPERATIONS STATES (Search, Notices, Attendance)
+    // 3. ID GENERATION STATES
+    const [newUserId, setNewUserId] = useState('');
+    const [newUserRole, setNewUserRole] = useState('Student');
+    const [genMessage, setGenMessage] = useState('');
+
+    // 4. OPERATIONS STATES
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
-    
     const [noticeTitle, setNoticeTitle] = useState('');
     const [noticeContent, setNoticeContent] = useState('');
-    
     const [attStudentId, setAttStudentId] = useState('');
     const [attClass, setAttClass] = useState('');
     const [attRoll, setAttRoll] = useState('');
     const [attPercent, setAttPercent] = useState(100);
 
-    // 4. STUDIO STATES
+    // 5. STUDIO STATES
     const [subject, setSubject] = useState('');
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
@@ -40,9 +40,23 @@ export default function AdminPortal() {
     const [isUploading, setIsUploading] = useState(false);
     const [message, setMessage] = useState('');
 
-    useEffect(() => { fetchLessons(); fetchUsers(); }, []);
+    useEffect(() => {
+        // SECURITY CHECK
+        const token = localStorage.getItem('token');
+        const role = localStorage.getItem('role');
+        if (!token || (role !== 'Headmaster' && role !== 'Assistant Headmaster')) {
+            window.location.href = '/';
+            return;
+        }
 
-    // --- DATA FETCHING ---
+        setAdminId(localStorage.getItem('userId') || '');
+        setAdminName(localStorage.getItem('fullName') || '');
+        setAdminRole(role);
+
+        fetchLessons(); 
+        fetchUsers();
+    }, []);
+
     const fetchLessons = async () => {
         try {
             const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons?t=${Date.now()}`, { cache: 'no-store' });
@@ -58,13 +72,27 @@ export default function AdminPortal() {
     };
 
     // --- OPERATIONS LOGIC ---
+    const handleGenerateId = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch('https://school-backend-szf6.onrender.com/api/admin/generate-id', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: newUserId, role: newUserRole })
+            });
+            const data = await res.json();
+            setGenMessage(data.message);
+            if (res.ok) { setNewUserId(''); fetchUsers(); }
+        } catch (err) { setGenMessage('Network error.'); }
+    };
+
     const handleSearch = async (e) => {
         e.preventDefault();
         if (!searchQuery) return setSearchResults([]);
         try {
             const res = await fetch(`https://school-backend-szf6.onrender.com/api/school/search?query=${searchQuery}`);
             if (res.ok) setSearchResults(await res.json());
-        } catch (err) { alert("Search failed."); }
+            else alert("Search returned an error from the server.");
+        } catch (err) { alert("Search failed to connect to backend."); }
     };
 
     const handlePostUrgentNotice = async (e) => {
@@ -74,7 +102,7 @@ export default function AdminPortal() {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title: noticeTitle, content: noticeContent, type: 'Notice', authorId: adminId, authorName: adminName, isUrgent: true })
             });
-            if (res.ok) { alert("Urgent Notice Pinned to All Dashboards!"); setNoticeTitle(''); setNoticeContent(''); }
+            if (res.ok) { alert("Urgent Notice Pinned!"); setNoticeTitle(''); setNoticeContent(''); }
         } catch (err) { alert("Failed to post notice."); }
     };
 
@@ -89,27 +117,31 @@ export default function AdminPortal() {
         } catch (err) { alert("Failed to update attendance."); }
     };
 
-    // --- GOD-MODE USER MANAGEMENT ---
+    // --- PROFILE EMAIL LOGIC (RESTORED!) ---
+    const handleUpdateEmail = async (e) => {
+        e.preventDefault();
+        setProfileMessage('Updating...');
+        try {
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/admin/update-email`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: adminId, email: myEmail })
+            });
+            if (res.ok) setProfileMessage('Email saved! You can now use the Forgot Password feature.');
+            else setProfileMessage('Failed to save email.');
+        } catch (err) { setProfileMessage('Network error while saving email.'); }
+    };
+
     const toggleUserStatus = async (user) => {
-        // RULE 1: Assistant Headmasters can only block Students
-        if (adminRole !== 'Headmaster' && user.role !== 'Student') {
-            return alert("Access Denied: Assistant Headmasters can only manage Student accounts.");
-        }
+        if (adminRole !== 'Headmaster' && user.role !== 'Student') return alert("Access Denied.");
         if (!window.confirm(`Are you sure you want to ${user.isActive ? 'BLOCK' : 'UNBLOCK'} ${user.fullName}?`)) return;
-        
         try {
             const res = await fetch(`https://school-backend-szf6.onrender.com/api/admin/users/${user._id}/toggle-status`, { method: 'PUT' });
             if (res.ok) fetchUsers();
         } catch (err) { alert("Error updating user status."); }
     };
 
-    // --- GOD-MODE STUDIO LOGIC ---
     const handleDeleteLesson = async (id, postRole) => {
-        // RULE 2: Assistants cannot delete Headmaster posts
-        if (adminRole !== 'Headmaster' && postRole === 'Headmaster') {
-            return alert("Access Denied: You cannot delete a post made by the Headmaster.");
-        }
-        if (!window.confirm('Admin Override: Delete this post permanently?')) return;
+        if (adminRole !== 'Headmaster' && postRole === 'Headmaster') return alert("Access Denied.");
+        if (!window.confirm('Delete this post permanently?')) return;
         try {
             const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}`, { method: 'DELETE' });
             if (res.ok) fetchLessons();
@@ -120,7 +152,6 @@ export default function AdminPortal() {
         e.preventDefault();
         if (!title || !content) return setMessage('Title and Content required.');
         setIsUploading(true); setMessage('');
-        
         const formData = new FormData();
         formData.append('teacherId', adminId); formData.append('teacherName', adminName);
         formData.append('subject', subject || 'Official Announcement');
@@ -138,11 +169,12 @@ export default function AdminPortal() {
         xhr.send(formData);
     };
 
-    const handleLogout = () => { localStorage.removeItem('token'); window.location.href = '/'; };
+    const handleLogout = () => { localStorage.removeItem('token'); localStorage.removeItem('role'); localStorage.removeItem('userId'); window.location.href = '/'; };
+
+    if (!adminId) return <div style={{ minHeight: '100vh', backgroundColor: '#f1f5f9' }}></div>;
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f1f5f9', fontFamily: 'sans-serif' }}>
-            {/* TOP NAVIGATION BAR */}
             <div style={{ backgroundColor: '#0f172a', color: 'white', padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100 }}>
                 <h1 style={{ margin: 0, fontSize: '20px', color: '#38bdf8' }}>{adminRole} Console</h1>
                 <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto' }}>
@@ -156,15 +188,13 @@ export default function AdminPortal() {
 
             <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '0 1rem' }}>
                 
-                {/* 1. OPERATIONS CENTER (NEW!) */}
+                {/* 1. OPERATIONS CENTER */}
                 {activeTab === 'operations' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                        
-                        {/* GLOBAL SEARCH */}
                         <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                             <h2 style={{ color: '#0f172a', margin: '0 0 1rem 0' }}>Global Directory Search</h2>
                             <form onSubmit={handleSearch} style={{ display: 'flex', gap: '1rem' }}>
-                                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search by name..." style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                                <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search by name or ID..." style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
                                 <button type="submit" style={{ padding: '0.8rem 2rem', backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Search</button>
                             </form>
                             {searchResults.length > 0 && (
@@ -179,10 +209,8 @@ export default function AdminPortal() {
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                            {/* OFFLINE ATTENDANCE */}
                             <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                                 <h2 style={{ color: '#0f172a', margin: '0 0 0.5rem 0' }}>Offline Attendance</h2>
-                                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '1.5rem' }}>Update annual attendance manually (1-100%).</p>
                                 <form onSubmit={handleAttendanceSubmit}>
                                     <input type="text" value={attStudentId} onChange={(e) => setAttStudentId(e.target.value)} placeholder="Student ID (e.g., stu123)" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
                                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
@@ -195,10 +223,8 @@ export default function AdminPortal() {
                                 </form>
                             </div>
 
-                            {/* URGENT RED NOTICES */}
                             <div style={{ backgroundColor: '#fee2e2', padding: '2rem', borderRadius: '12px', border: '2px solid #f87171' }}>
                                 <h2 style={{ color: '#9f1239', margin: '0 0 0.5rem 0' }}>Urgent Pinned Notice</h2>
-                                <p style={{ fontSize: '13px', color: '#9f1239', marginBottom: '1.5rem' }}>Broadcast a red banner alert to every user's dashboard.</p>
                                 <form onSubmit={handlePostUrgentNotice}>
                                     <input type="text" value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)} placeholder="Urgent Title..." required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #fca5a5', boxSizing: 'border-box' }} />
                                     <textarea value={noticeContent} onChange={(e) => setNoticeContent(e.target.value)} placeholder="Important details..." rows="3" required style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', borderRadius: '8px', border: '1px solid #fca5a5', boxSizing: 'border-box' }}></textarea>
@@ -213,50 +239,18 @@ export default function AdminPortal() {
                 {activeTab === 'studio' && (
                     <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                         <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>Publish Official Media</h2>
-                        {message && <div style={{ padding: '1rem', marginBottom: '1rem', backgroundColor: '#e0f2fe', color: '#0369a1', borderRadius: '8px', fontWeight: 'bold' }}>{message}</div>}
-                        
                         <form onSubmit={handlePublish} style={{ marginBottom: '3rem', padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Target Audience:</label>
-                                    <select value={targetClass} onChange={(e) => setTargetClass(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                                        <option value="Everyone">Everyone (Public)</option><option value="Parents & Guardians">Parents & Guardians</option><option value="Teachers & Staff">Teachers & Staff</option><option value="Class V">Class V</option><option value="Class X">Class X</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Category:</label>
-                                    <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Administrative Notice" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-                                </div>
+                                <select value={targetClass} onChange={(e) => setTargetClass(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                    <option value="Everyone">Everyone (Public)</option><option value="Parents & Guardians">Parents & Guardians</option><option value="Teachers & Staff">Teachers & Staff</option><option value="Class V">Class V</option><option value="Class X">Class X</option>
+                                </select>
+                                <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Category e.g. Notice" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
                             </div>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Title & Content:</label>
-                                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter title..." style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '0.5rem' }} />
-                                <textarea value={content} onChange={(e) => setContent(e.target.value)} rows="3" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}></textarea>
-                            </div>
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '14px' }}>Attach Media:</label>
-                                <input type="file" onChange={(e) => setMediaFile(e.target.files[0])} accept="video/*,audio/*,image/*,application/pdf" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px' }} disabled={isUploading} />
-                            </div>
-                            <button type="submit" style={{ padding: '0.85rem 2rem', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', width: '100%' }}>
-                                {isUploading ? 'Uploading...' : 'Broadcast Message'}
-                            </button>
+                            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '1rem' }} />
+                            <textarea value={content} onChange={(e) => setContent(e.target.value)} rows="3" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '1rem' }}></textarea>
+                            <input type="file" onChange={(e) => setMediaFile(e.target.files[0])} accept="video/*,audio/*,image/*,application/pdf" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', marginBottom: '1rem' }} disabled={isUploading} />
+                            <button type="submit" style={{ padding: '0.85rem 2rem', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', width: '100%' }}>{isUploading ? 'Uploading...' : 'Broadcast Message'}</button>
                         </form>
-
-                        <h2 style={{ color: '#0f172a', marginBottom: '1rem', borderTop: '2px solid #e2e8f0', paddingTop: '1.5rem' }}>Global Feed (Admin View)</h2>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            {lessons.map(lesson => (
-                                <div key={lesson._id} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', marginRight: '0.5rem' }}>{lesson.targetClass}</span>
-                                        <strong>{lesson.title}</strong> <span style={{ fontSize: '13px', color: '#64748b' }}>by {lesson.teacherName}</span>
-                                    </div>
-                                    {/* Hides delete button if Asst. Headmaster tries to delete Headmaster post */}
-                                    {(adminRole === 'Headmaster' || lesson.teacherName !== 'Headmaster Admin') && (
-                                        <button onClick={() => handleDeleteLesson(lesson._id, lesson.teacherName === 'Headmaster Admin' ? 'Headmaster' : 'Teacher')} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>Delete Post</button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
                     </div>
                 )}
 
@@ -264,47 +258,40 @@ export default function AdminPortal() {
                 {activeTab === 'users' && (
                     <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                         <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>Manage Registered Users</h2>
-                        <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>Block or deactivate accounts. (Assistant Headmasters can only manage Students).</p>
-                        
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead>
-                                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#334155' }}>Name</th>
-                                        <th style={{ padding: '1rem', textAlign: 'left', color: '#334155' }}>ID & Role</th>
-                                        <th style={{ padding: '1rem', textAlign: 'center', color: '#334155' }}>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.map(user => (
-                                        <tr key={user._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                            <td style={{ padding: '1rem', fontWeight: 'bold', color: user.isActive ? '#0f172a' : '#94a3b8' }}>{user.fullName}</td>
-                                            <td style={{ padding: '1rem' }}>{user.userId} <br/><span style={{ fontSize: '12px', color: '#64748b' }}>{user.role}</span></td>
-                                            <td style={{ padding: '1rem', textAlign: 'center' }}>
-                                                {/* Role restriction logic applied here */}
-                                                {user.role !== 'Headmaster' && (adminRole === 'Headmaster' || user.role === 'Student') && (
-                                                    <button onClick={() => toggleUserStatus(user)} style={{ padding: '0.4rem 0.8rem', backgroundColor: user.isActive ? '#fee2e2' : '#dcfce7', color: user.isActive ? '#ef4444' : '#166534', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
-                                                        {user.isActive ? 'Block Account' : 'Unblock Account'}
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
+                            <form onSubmit={handleGenerateId} style={{ display: 'flex', gap: '1rem' }}>
+                                <input type="text" value={newUserId} onChange={(e) => setNewUserId(e.target.value)} placeholder="Enter New ID" required style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
+                                <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value)} style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                    <option value="Student">Student</option><option value="Teacher">Teacher</option>
+                                    {adminRole === 'Headmaster' && <option value="Assistant Headmaster">Assistant Headmaster</option>}
+                                </select>
+                                <button type="submit" style={{ padding: '0.75rem 2rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Generate ID</button>
+                            </form>
                         </div>
                     </div>
                 )}
 
-                {/* 4. PROFILE SETTINGS TAB */}
+                {/* 4. PROFILE SETTINGS TAB (RESTORED!) */}
                 {activeTab === 'profile' && (
                     <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                         <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>Profile Settings</h2>
                         
                         <div style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
                             <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#475569' }}>Registered ID: <span style={{ color: '#0f172a' }}>{adminId}</span></p>
+                            <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', color: '#475569' }}>Name: <span style={{ color: '#0f172a' }}>{adminName}</span></p>
                             <p style={{ margin: '0', fontWeight: 'bold', color: '#475569' }}>System Role: <span style={{ color: '#0f172a' }}>{adminRole}</span></p>
                         </div>
+
+                        <h3 style={{ fontSize: '16px', color: '#334155', marginBottom: '1rem' }}>Security & Recovery</h3>
+                        {profileMessage && <div style={{ padding: '1rem', marginBottom: '1rem', backgroundColor: '#e0f2fe', color: '#0369a1', borderRadius: '8px', fontSize: '14px', fontWeight: 'bold' }}>{profileMessage}</div>}
+                        
+                        <form onSubmit={handleUpdateEmail}>
+                            <div style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#0f172a' }}>Linked Recovery Email Address:</label>
+                                <input type="email" value={myEmail} onChange={(e) => setMyEmail(e.target.value)} placeholder="Enter your email to enable password recovery..." style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} required />
+                            </div>
+                            <button type="submit" style={{ padding: '0.75rem 1.5rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Save Email</button>
+                        </form>
                     </div>
                 )}
             </div>
