@@ -1,317 +1,143 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-export default function StudentDashboard() {
-    const [activeTab, setActiveTab] = useState('notices'); // Default to the new Notice Board!
-    
-    const [data, setData] = useState(null);
-    const [error, setError] = useState('');
-    
-    const [reportTitle, setReportTitle] = useState('');
-    const [reportDescription, setReportDescription] = useState('');
-    const [reportMessage, setReportMessage] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [myReports, setMyReports] = useState([]);
-    const [loadingReports, setLoadingReports] = useState(false);
-    
-    const [leaveStartDate, setLeaveStartDate] = useState('');
-    const [leaveEndDate, setLeaveEndDate] = useState('');
-    const [leaveReason, setLeaveReason] = useState('');
-    const [leaveMessage, setLeaveMessage] = useState('');
-    const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
-    const [myLeaves, setMyLeaves] = useState([]);
-    const [loadingLeaves, setLoadingLeaves] = useState(false);
+export default function StudentPortal() {
+    const [lessons, setLessons] = useState([]);
+    const [activeCommentLesson, setActiveCommentLesson] = useState(null);
+    const [commentText, setCommentText] = useState('');
 
-    // NEW: Notice Board State
-    const [notices, setNotices] = useState([]);
-    const [loadingNotices, setLoadingNotices] = useState(false);
+    // Temporary static info (to be replaced by real login data later)
+    const studentId = "stu999"; 
+    const studentName = "Test Student";
 
-    const handleLogout = () => { localStorage.removeItem('token'); window.location.href = '/'; };
+    useEffect(() => { fetchLessons(); }, []);
 
-    useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                const res = await fetch('https://school-backend-szf6.onrender.com/api/student/profile', { headers: { 'Authorization': `Bearer ${token}` } });
-                let json = {};
-                try { json = await res.json(); } catch(e) {}
-                if (res.ok) setData(json); else setError(json.message || 'Error loading profile.');
-            } catch (err) { setError('Network error.'); }
-        };
-        fetchProfile();
-    }, []);
-
-    const fetchMyReports = async () => {
-        setLoadingReports(true);
+    const fetchLessons = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/reports/my-reports', { headers: { 'Authorization': `Bearer ${token}` } });
-            let json = [];
-            try { json = await res.json(); } catch(e) {}
-            if (res.ok) setMyReports(json);
-        } catch (err) {}
-        setLoadingReports(false);
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons?t=${Date.now()}`, { cache: 'no-store' });
+            if (res.ok) setLessons(await res.json());
+        } catch (err) { console.error('Failed to fetch lessons'); }
     };
 
-    const fetchMyLeaves = async () => {
-        setLoadingLeaves(true);
+    const handleLike = async (id) => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/leaves/my-leaves', { headers: { 'Authorization': `Bearer ${token}` } });
-            let json = [];
-            try { json = await res.json(); } catch(e) {}
-            if (res.ok) setMyLeaves(json);
-        } catch (err) {}
-        setLoadingLeaves(false);
-    };
-
-    // NEW: Fetch Notices Function
-    const fetchNotices = async () => {
-        setLoadingNotices(true);
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/notices/all', { headers: { 'Authorization': `Bearer ${token}` } });
-            let json = [];
-            try { json = await res.json(); } catch(e) {}
-            if (res.ok) setNotices(json);
-        } catch (err) {}
-        setLoadingNotices(false);
-    };
-
-    useEffect(() => {
-        if (activeTab === 'report') fetchMyReports();
-        if (activeTab === 'leave') fetchMyLeaves();
-        if (activeTab === 'notices') fetchNotices();
-    }, [activeTab]);
-
-    const handleSubmitReport = async (e) => {
-        e.preventDefault();
-        if (!reportTitle || !reportDescription) return setReportMessage('Please provide title and details.');
-        setIsSubmitting(true); setReportMessage('Sending securely...');
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/reports/submit', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ title: reportTitle, description: reportDescription, evidenceUrl: '' })
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}/like`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: studentId })
             });
-            let json = {};
-            try { json = await res.json(); } catch(err) {}
-            if (res.ok) {
-                setReportMessage('Success: Tip securely delivered.');
-                setReportTitle(''); setReportDescription(''); fetchMyReports();
-            } else setReportMessage(`Backend Error: ${json.message || 'Failed to submit'}`);
-        } catch (err) { setReportMessage('Network error.'); }
-        setIsSubmitting(false);
+            if (res.ok) fetchLessons();
+        } catch (err) { alert('Network error while liking.'); }
     };
 
-    const handleSubmitLeave = async (e) => {
-        e.preventDefault();
-        if (!leaveStartDate || !leaveEndDate || !leaveReason) return setLeaveMessage('Please fill all fields.');
-        setIsSubmittingLeave(true); setLeaveMessage('Submitting...');
+    const handleComment = async (id) => {
+        if (!commentText) return alert("Please type a comment first.");
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/leaves/submit', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ startDate: leaveStartDate, endDate: leaveEndDate, reason: leaveReason })
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}/comment`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: studentId, fullName: studentName, text: commentText })
             });
-            let json = {};
-            try { json = await res.json(); } catch(err) {}
-            if (res.ok) {
-                setLeaveMessage('Success: Leave application submitted.');
-                setLeaveStartDate(''); setLeaveEndDate(''); setLeaveReason(''); fetchMyLeaves(); 
-            } else {
-                setLeaveMessage(`Backend Error: ${json.message || 'Failed to submit'}`);
-            }
-        } catch (err) { setLeaveMessage(`Network Error: ${err.message}`); }
-        setIsSubmittingLeave(false);
+            if (res.ok) { setCommentText(''); setActiveCommentLesson(null); fetchLessons(); }
+        } catch (err) { alert('Network error while posting comment.'); }
     };
 
-    const getBadgeStyle = (status) => {
-        if (status === 'Pending') return { bg: '#fef08a', text: '#854d0e' }; 
-        if (status === 'Reviewed' || status === 'Approved') return { bg: '#dcfce7', text: '#166534' }; 
-        if (status === 'Rejected') return { bg: '#fee2e2', text: '#9f1239' };
-        return { bg: '#e2e8f0', text: '#334155' }; 
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        window.location.href = '/';
     };
 
     return (
-        <div style={{ minHeight: '100vh', padding: '2rem 1rem', backgroundColor: '#f8fafc', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
-            <div style={{ maxWidth: '600px', margin: '0 auto', backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', boxSizing: 'border-box' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                    <h1 style={{ color: '#000080', margin: 0, fontSize: '24px' }}>Student Portal</h1>
-                    <button onClick={handleLogout} style={{ padding: '0.4rem 0.8rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Log Out</button>
+        <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', padding: '2rem', fontFamily: 'sans-serif' }}>
+            <div style={{ maxWidth: '800px', margin: '0 auto', backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '2rem' }}>
+                    <h1 style={{ color: '#0ea5e9', margin: 0 }}>My Classes</h1>
+                    <button onClick={handleLogout} style={{ padding: '0.5rem 1rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Log Out</button>
                 </div>
 
-                {/* 4-Tab Navigation */}
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '2px solid #e2e8f0', paddingBottom: '1rem', flexWrap: 'wrap' }}>
-                    <button onClick={() => { setActiveTab('notices'); setReportMessage(''); setLeaveMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'notices' ? '#9333ea' : '#f1f5f9', color: activeTab === 'notices' ? 'white' : '#475569', fontSize: '12px' }}>Notices</button>
-                    <button onClick={() => { setActiveTab('records'); setReportMessage(''); setLeaveMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'records' ? '#000080' : '#f1f5f9', color: activeTab === 'records' ? 'white' : '#475569', fontSize: '12px' }}>Records</button>
-                    <button onClick={() => { setActiveTab('leave'); setReportMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'leave' ? '#0f766e' : '#f1f5f9', color: activeTab === 'leave' ? 'white' : '#475569', fontSize: '12px' }}>Leave App</button>
-                    <button onClick={() => { setActiveTab('report'); setLeaveMessage(''); }} style={{ flex: '1 1 20%', padding: '0.6rem 0.25rem', fontWeight: 'bold', borderRadius: '6px', cursor: 'pointer', border: 'none', backgroundColor: activeTab === 'report' ? '#b91c1c' : '#f1f5f9', color: activeTab === 'report' ? 'white' : '#475569', fontSize: '12px' }}>Under Zone</button>
-                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                    {lessons.length === 0 ? <p style={{ color: '#64748b', textAlign: 'center', padding: '2rem' }}>No classes available right now. Check back later!</p> : null}
+                    
+                    {lessons.map(lesson => {
+                        const isVideo = lesson.fileUrl && lesson.fileUrl.match(/\.(mp4|webm|ogg|mov)$/i);
+                        const isAudio = lesson.fileUrl && lesson.fileUrl.match(/\.(mp3|wav|m4a|aac)$/i);
 
-                {/* TAB 1: NEW NOTICE BOARD */}
-                {activeTab === 'notices' && (
-                    <div>
-                        <div style={{ padding: '1rem', backgroundColor: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '8px', marginBottom: '1.5rem' }}>
-                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#7e22ce', fontSize: '16px' }}>School Notice Board</h3>
-                            <p style={{ margin: 0, fontSize: '13px', color: '#6b21a8' }}>Official announcements and urgent logistics alerts.</p>
-                        </div>
-                        
-                        {loadingNotices ? <p style={{ textAlign: 'center', color: '#64748b' }}>Checking for updates...</p> : notices.length === 0 ? <p style={{ textAlign: 'center', color: '#64748b', fontStyle: 'italic' }}>No notices at this time.</p> : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                {notices.map(notice => (
-                                    <div key={notice._id} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: notice.type === 'Logistics' ? '#fffbeb' : '#f8fafc', borderLeft: `4px solid ${notice.type === 'Logistics' ? '#f59e0b' : '#3b82f6'}` }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                                            <strong style={{ color: '#0f172a', fontSize: '15px' }}>{notice.title}</strong>
-                                            <span style={{ backgroundColor: notice.type === 'Logistics' ? '#fef3c7' : '#dbeafe', color: notice.type === 'Logistics' ? '#b45309' : '#1d4ed8', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{notice.type}</span>
-                                        </div>
-                                        <p style={{ margin: '0 0 0.75rem 0', fontSize: '12px', color: '#64748b' }}>By {notice.authorRole} • {new Date(notice.createdAt).toLocaleDateString()}</p>
-                                        <div style={{ margin: 0, fontSize: '14px', color: '#334155', whiteSpace: 'pre-wrap', backgroundColor: 'white', padding: '0.75rem', borderRadius: '6px', border: `1px solid ${notice.type === 'Logistics' ? '#fde68a' : '#bfdbfe'}` }}>
-                                            {notice.content}
-                                        </div>
+                        return (
+                            <div key={lesson._id} style={{ padding: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '12px', backgroundColor: '#ffffff', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}>{lesson.targetClass || 'All Classes'}</span>
+                                        {lesson.playlistName && (
+                                            <span style={{ backgroundColor: '#f3e8ff', color: '#7e22ce', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}>📁 {lesson.playlistName}</span>
+                                        )}
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
+                                    <h3 style={{ margin: '0 0 0.2rem 0', color: '#0f172a', fontSize: '20px' }}>{lesson.title}</h3>
+                                    <p style={{ margin: '0', fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>{lesson.subject} • Taught by {lesson.teacherName}</p>
+                                </div>
 
-                {/* TAB 2: RECORDS */}
-                {activeTab === 'records' && (
-                    <div>
-                        {error ? <div style={{ padding: '1rem', backgroundColor: '#fee2e2', color: '#b91c1c', borderRadius: '8px', textAlign: 'center', fontWeight: 'bold' }}>{error}</div> 
-                        : !data ? <div style={{ textAlign: 'center', color: '#64748b', padding: '2rem' }}>Fetching your live academic records...</div> 
-                        : !data.profile ? <div style={{ padding: '1.5rem', backgroundColor: '#fff7ed', color: '#c2410c', borderRadius: '8px', textAlign: 'center', border: '1px solid #ffedd5' }}><strong>Profile Pending:</strong> The Headmaster has not uploaded your academic records yet.</div>
-                        : (
-                            <div>
-                                <div style={{ padding: '1.5rem', backgroundColor: '#e0e7ff', borderRadius: '8px', color: '#3730a3', marginBottom: '1.5rem' }}>
-                                    <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '20px' }}>Welcome, {data.fullName}</h3>
-                                    <p style={{ margin: 0, fontSize: '15px' }}>Class: <strong>{data.profile.currentClass}</strong></p>
+                                <p style={{ margin: '0 0 1.5rem 0', fontSize: '15px', whiteSpace: 'pre-wrap', color: '#334155', lineHeight: '1.6' }}>{lesson.content}</p>
+                                
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    {isVideo && (
+                                        <div style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#000', marginBottom: '1rem' }}>
+                                            <video controls poster={lesson.thumbnailUrl || ''} style={{ width: '100%', maxHeight: '450px', display: 'block', objectFit: 'contain' }}>
+                                                <source src={lesson.fileUrl} />
+                                            </video>
+                                        </div>
+                                    )}
+
+                                    {isAudio && (
+                                        <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            {lesson.thumbnailUrl && <img src={lesson.thumbnailUrl} alt="Cover" style={{ width: '80px', height: '80px', borderRadius: '8px', objectFit: 'cover' }} />}
+                                            <div style={{ flex: 1 }}>
+                                                <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>🎧 Audio Lesson</p>
+                                                <audio controls style={{ width: '100%' }}><source src={lesson.fileUrl} /></audio>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!isVideo && !isAudio && lesson.thumbnailUrl && (
+                                        <div style={{ marginBottom: '1rem' }}>
+                                            <img src={lesson.thumbnailUrl} alt="Class Material" style={{ width: '100%', maxHeight: '400px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                                        </div>
+                                    )}
+
+                                    {lesson.fileUrl && !isVideo && !isAudio && (
+                                        <a href={lesson.fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block', padding: '0.8rem 1.2rem', backgroundColor: '#e2e8f0', color: '#0f172a', fontWeight: 'bold', textDecoration: 'none', borderRadius: '8px' }}>📎 Download Class Material</a>
+                                    )}
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                                    <div style={{ padding: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', textAlign: 'center' }}>
-                                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#64748b', fontSize: '14px' }}>Annual Attendance</h4>
-                                        <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: data.profile.annualAttendancePercentage >= 75 ? '#166534' : '#b91c1c' }}>{data.profile.annualAttendancePercentage}%</p>
-                                    </div>
-                                    <div style={{ padding: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', textAlign: 'center' }}>
-                                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#64748b', fontSize: '14px' }}>Behavioral Rating</h4>
-                                        <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#000080' }}>{data.profile.behavioralRating} <span style={{fontSize: '16px', color: '#94a3b8'}}>/ 5</span></p>
-                                    </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
+                                    <button onClick={() => handleLike(lesson._id)} style={{ background: 'none', border: 'none', color: lesson.likes?.includes(studentId) ? '#ef4444' : '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        {lesson.likes?.includes(studentId) ? '❤️ Liked' : '🤍 Like'} 
+                                        <span style={{ backgroundColor: '#f1f5f9', padding: '0.1rem 0.4rem', borderRadius: '99px', fontSize: '12px' }}>{lesson.likes?.length || 0}</span>
+                                    </button>
+                                    <button onClick={() => setActiveCommentLesson(activeCommentLesson === lesson._id ? null : lesson._id)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        💬 Ask Question
+                                        <span style={{ backgroundColor: '#f1f5f9', padding: '0.1rem 0.4rem', borderRadius: '99px', fontSize: '12px' }}>{lesson.comments?.length || 0}</span>
+                                    </button>
                                 </div>
-                                {data.profile.behavioralComments && (
-                                    <div style={{ padding: '1.25rem', backgroundColor: '#f1f5f9', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '15px', color: '#334155', borderLeft: '4px solid #94a3b8' }}>
-                                        <strong style={{ color: '#0f172a' }}>Teacher's Comment: </strong> {data.profile.behavioralComments}
+
+                                {activeCommentLesson === lesson._id && (
+                                    <div style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem' }}>
+                                        <input type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Ask a question or leave a review..." style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }} />
+                                        <button onClick={() => handleComment(lesson._id)} style={{ padding: '0.8rem 1.5rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Post</button>
                                     </div>
                                 )}
-                                <div style={{ padding: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                                    <h4 style={{ margin: '0 0 1rem 0', color: '#334155', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>Financial Status</h4>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '16px' }}><span style={{ color: '#64748b' }}>Total Annual Fees:</span><strong>₹{data.profile.fees.totalAnnual}</strong></div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '16px' }}><span style={{ color: '#64748b' }}>Amount Paid:</span><strong style={{ color: '#166534' }}>₹{data.profile.fees.amountPaid}</strong></div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.75rem', borderTop: '1px dashed #cbd5e1', fontSize: '16px' }}><span style={{ color: '#64748b' }}>Pending Dues:</span><strong style={{ color: '#b91c1c' }}>₹{data.profile.fees.pendingDues}</strong></div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
 
-                {/* TAB 3: LEAVE APP */}
-                {activeTab === 'leave' && (
-                    <div>
-                        <div style={{ padding: '1rem', backgroundColor: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: '8px', marginBottom: '1.5rem' }}>
-                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#0f766e', fontSize: '16px' }}>Leave Application</h3>
-                            <p style={{ margin: 0, fontSize: '13px', color: '#115e59' }}>Submit your leave request directly to the Headmaster for approval.</p>
-                        </div>
-                        {leaveMessage && <div style={{ padding: '0.75rem', marginBottom: '1.5rem', backgroundColor: leaveMessage.includes('Success') ? '#dcfce7' : '#fee2e2', color: leaveMessage.includes('Success') ? '#166534' : '#b91c1c', borderRadius: '6px', textAlign: 'center', fontSize: '14px', fontWeight: 'bold' }}>{leaveMessage}</div>}
-                        
-                        <form onSubmit={handleSubmitLeave}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>Start Date:</label>
-                                    <input type="date" value={leaveStartDate} onChange={(e) => setLeaveStartDate(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '15px' }} />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>End Date:</label>
-                                    <input type="date" value={leaveEndDate} onChange={(e) => setLeaveEndDate(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '15px' }} />
-                                </div>
-                            </div>
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>Reason for Leave:</label>
-                                <textarea value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)} placeholder="Explain why you need leave..." rows="3" style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '15px', resize: 'vertical' }} />
-                            </div>
-                            <button type="submit" disabled={isSubmittingLeave} style={{ width: '100%', padding: '0.85rem', backgroundColor: isSubmittingLeave ? '#94a3b8' : '#0f766e', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '16px', cursor: isSubmittingLeave ? 'not-allowed' : 'pointer' }}>
-                                {isSubmittingLeave ? 'Submitting...' : 'Submit Application'}
-                            </button>
-                        </form>
-
-                        <hr style={{ margin: '2rem 0 1.5rem 0', border: 'none', borderTop: '2px dashed #e2e8f0' }} />
-                        <h4 style={{ margin: '0 0 1rem 0', color: '#334155', fontSize: '16px' }}>My Leave History</h4>
-                        {loadingLeaves ? <p style={{ color: '#64748b', fontSize: '14px' }}>Loading past applications...</p> : myLeaves.length === 0 ? <p style={{ color: '#64748b', fontSize: '14px', fontStyle: 'italic' }}>No leave applications found.</p> : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                {myLeaves.map(leave => {
-                                    const badge = getBadgeStyle(leave.status);
-                                    return (
-                                        <div key={leave._id} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc', borderLeft: `4px solid ${badge.bg === '#dcfce7' ? '#166534' : badge.bg === '#fee2e2' ? '#9f1239' : '#eab308'}` }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                                                <strong style={{ color: '#0f172a', fontSize: '14px' }}>{new Date(leave.startDate).toLocaleDateString()} - {new Date(leave.endDate).toLocaleDateString()}</strong>
-                                                <span style={{ backgroundColor: badge.bg, color: badge.text, padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{leave.status}</span>
+                                {lesson.comments && lesson.comments.length > 0 && (
+                                    <div style={{ marginTop: '1.5rem', padding: '1.2rem', backgroundColor: '#f8fafc', borderRadius: '8px', borderLeft: '4px solid #cbd5e1' }}>
+                                        <h4 style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px' }}>Class Discussion</h4>
+                                        {lesson.comments.map((comment, index) => (
+                                            <div key={index} style={{ marginBottom: index < lesson.comments.length - 1 ? '1rem' : '0', paddingBottom: index < lesson.comments.length - 1 ? '1rem' : '0', borderBottom: index < lesson.comments.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                                                <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#0f172a', marginBottom: '0.2rem' }}>{comment.fullName}</div>
+                                                <div style={{ fontSize: '14px', color: '#475569', lineHeight: '1.4' }}>{comment.text}</div>
                                             </div>
-                                            <p style={{ margin: '0 0 0.5rem 0', fontSize: '13px', color: '#475569' }}>{leave.reason}</p>
-                                            {leave.adminFeedback && (
-                                                <div style={{ backgroundColor: 'white', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '12px', color: '#0f172a' }}>
-                                                    <strong>Headmaster's Note:</strong> {leave.adminFeedback}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                                        ))}
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
-                )}
-
-                {/* TAB 4: UNDER ZONE */}
-                {activeTab === 'report' && (
-                    <div>
-                        <div style={{ padding: '1rem', backgroundColor: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', marginBottom: '1.5rem' }}>
-                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#9f1239', fontSize: '16px' }}>The Under Zone</h3>
-                            <p style={{ margin: 0, fontSize: '13px', color: '#be123c' }}>Strictly confidential. Sent directly to the Headmaster.</p>
-                        </div>
-                        {reportMessage && <div style={{ padding: '0.75rem', marginBottom: '1.5rem', backgroundColor: reportMessage.includes('Success') ? '#dcfce7' : '#fee2e2', color: reportMessage.includes('Success') ? '#166534' : '#b91c1c', borderRadius: '6px', textAlign: 'center', fontSize: '14px', fontWeight: 'bold' }}>{reportMessage}</div>}
-                        
-                        <form onSubmit={handleSubmitReport}>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>Incident Title:</label>
-                                <input type="text" value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '16px' }} />
-                            </div>
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>Detailed Description:</label>
-                                <textarea value={reportDescription} onChange={(e) => setReportDescription(e.target.value)} rows="4" style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid #ccc', boxSizing: 'border-box', fontSize: '16px', resize: 'vertical' }} />
-                            </div>
-                            <button type="submit" disabled={isSubmitting} style={{ width: '100%', padding: '0.85rem', backgroundColor: isSubmitting ? '#94a3b8' : '#b91c1c', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '16px', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
-                                {isSubmitting ? 'Sending...' : 'Submit Confidential Report'}
-                            </button>
-                        </form>
-
-                        <hr style={{ margin: '2rem 0 1.5rem 0', border: 'none', borderTop: '2px dashed #e2e8f0' }} />
-                        <h4 style={{ margin: '0 0 1rem 0', color: '#334155', fontSize: '16px' }}>My Past Tips</h4>
-                        {loadingReports ? <p style={{ color: '#64748b', fontSize: '14px' }}>Loading past tips...</p> : myReports.length === 0 ? <p style={{ color: '#64748b', fontSize: '14px', fontStyle: 'italic' }}>No tips submitted.</p> : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                {myReports.map(report => {
-                                    const badge = getBadgeStyle(report.status);
-                                    return (
-                                        <div key={report._id} style={{ padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                                                <strong style={{ color: '#0f172a', fontSize: '15px' }}>{report.title}</strong>
-                                                <span style={{ backgroundColor: badge.bg, color: badge.text, padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>{report.status}</span>
-                                            </div>
-                                            <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Submitted on: {new Date(report.createdAt).toLocaleDateString()}</p>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                )}
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );
