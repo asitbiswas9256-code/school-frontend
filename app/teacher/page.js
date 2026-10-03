@@ -2,10 +2,19 @@
 import { useState, useEffect } from 'react';
 
 export default function TeacherPortal() {
+    // Basic Details
     const [subject, setSubject] = useState('');
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
+    
+    // NEW: Organization Details
+    const [targetClass, setTargetClass] = useState('Class X');
+    const [playlistName, setPlaylistName] = useState('');
+
+    // Media & Thumbnails
     const [mediaFile, setMediaFile] = useState(null);
+    const [thumbnailFile, setThumbnailFile] = useState(null);
+    
     const [message, setMessage] = useState('');
     const [lessons, setLessons] = useState([]);
 
@@ -24,16 +33,19 @@ export default function TeacherPortal() {
 
     useEffect(() => { fetchLessons(); }, []);
 
+    // FIXED: Added cache-busting to ensure Likes & Comments show immediately!
     const fetchLessons = async () => {
         try {
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/lessons');
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons?t=${Date.now()}`, {
+                cache: 'no-store'
+            });
             if (res.ok) setLessons(await res.json());
         } catch (err) { console.error('Failed to fetch lessons'); }
     };
 
     const handlePublish = (e) => {
         e.preventDefault();
-        if (!subject || !title || !content) return setMessage('Subject, Title, and Content are required.');
+        if (!subject || !title || !content || !targetClass) return setMessage('Subject, Title, Class, and Content are required.');
         
         setIsUploading(true); setMessage(''); setUploadProgress(0); setUploadStats('Preparing upload...');
         
@@ -43,7 +55,10 @@ export default function TeacherPortal() {
         formData.append('subject', subject);
         formData.append('title', title);
         formData.append('content', content);
+        formData.append('targetClass', targetClass);
+        formData.append('playlistName', playlistName);
         if (mediaFile) formData.append('mediaFile', mediaFile);
+        if (thumbnailFile) formData.append('thumbnailFile', thumbnailFile); // NEW: Send Thumbnail
 
         const xhr = new XMLHttpRequest();
         setXhrRequest(xhr);
@@ -62,9 +77,11 @@ export default function TeacherPortal() {
 
         xhr.addEventListener('load', () => {
             if (xhr.status === 201) {
-                setMessage('Success! Lesson published.');
-                setSubject(''); setTitle(''); setContent(''); setMediaFile(null);
-                document.getElementById('file-upload').value = '';
+                setMessage('Success! Online Class published.');
+                setSubject(''); setTitle(''); setContent(''); setPlaylistName('');
+                setMediaFile(null); setThumbnailFile(null);
+                document.getElementById('media-upload').value = '';
+                document.getElementById('thumb-upload').value = '';
                 fetchLessons();
             } else { setMessage('Upload failed. Server responded with an error.'); }
             setIsUploading(false); setXhrRequest(null);
@@ -92,7 +109,7 @@ export default function TeacherPortal() {
             const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}/like`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: teacherId })
             });
-            if (res.ok) fetchLessons();
+            if (res.ok) fetchLessons(); // Triggers instant UI update now!
         } catch (err) { console.error('Failed to like lesson'); }
     };
 
@@ -122,7 +139,7 @@ export default function TeacherPortal() {
             <div style={{ maxWidth: '800px', margin: '0 auto', backgroundColor: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f1f5f9', paddingBottom: '1rem', marginBottom: '2rem' }}>
-                    <h1 style={{ color: '#0ea5e9', margin: 0 }}>Teacher Portal</h1>
+                    <h1 style={{ color: '#0ea5e9', margin: 0 }}>Teacher Studio</h1>
                     <button onClick={handleLogout} style={{ padding: '0.5rem 1rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Log Out</button>
                 </div>
 
@@ -131,14 +148,38 @@ export default function TeacherPortal() {
                 {message && <div style={{ padding: '1rem', marginBottom: '1rem', backgroundColor: message.includes('Error') || message.includes('failed') || message.includes('canceled') ? '#fee2e2' : '#dcfce7', color: message.includes('Error') || message.includes('failed') || message.includes('canceled') ? '#9f1239' : '#166534', borderRadius: '8px', fontWeight: 'bold', textAlign: 'center' }}>{message}</div>}
 
                 <form onSubmit={handlePublish} style={{ marginBottom: '3rem' }}>
+                    
+                    {/* NEW: Class & Playlist Row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem', backgroundColor: '#f1f5f9', padding: '1rem', borderRadius: '8px' }}>
+                        <div>
+                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#0f172a' }}>Target Class:</label>
+                            <select value={targetClass} onChange={(e) => setTargetClass(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} disabled={isUploading}>
+                                <option value="Class V">Class V</option>
+                                <option value="Class VI">Class VI</option>
+                                <option value="Class VII">Class VII</option>
+                                <option value="Class VIII">Class VIII</option>
+                                <option value="Class IX">Class IX</option>
+                                <option value="Class X">Class X</option>
+                                <option value="Class XI (Semester 1)">Class XI (Semester 1)</option>
+                                <option value="Class XI (Semester 2)">Class XI (Semester 2)</option>
+                                <option value="Class XII (Semester 3)">Class XII (Semester 3)</option>
+                                <option value="Class XII (Semester 4)">Class XII (Semester 4)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#0f172a' }}>Playlist / Unit Name (Optional):</label>
+                            <input type="text" value={playlistName} onChange={(e) => setPlaylistName(e.target.value)} placeholder="e.g. Algebra Fundamentals" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} disabled={isUploading} />
+                        </div>
+                    </div>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                         <div>
                             <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Subject:</label>
-                            <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Science" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} disabled={isUploading} />
+                            <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Mathematics" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} disabled={isUploading} />
                         </div>
                         <div>
                             <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Topic Title:</label>
-                            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Gravity" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} disabled={isUploading} />
+                            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Linear Equations" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} disabled={isUploading} />
                         </div>
                     </div>
 
@@ -147,11 +188,18 @@ export default function TeacherPortal() {
                         <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Type the main lesson here..." rows="4" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', resize: 'vertical' }} disabled={isUploading}></textarea>
                     </div>
 
-                    <div style={{ marginBottom: '1.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '2px dashed #94a3b8' }}>
-                        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#0f172a', fontSize: '18px' }}>Attach Class Media</label>
-                        <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b' }}>Select an MP4 video, MP3 audio file, or an image chart. Videos and audio will embed directly in the feed.</p>
-                        
-                        <input id="file-upload" type="file" onChange={(e) => setMediaFile(e.target.files[0])} accept="image/*,video/*,audio/*" style={{ width: '100%', padding: '0.75rem', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer' }} disabled={isUploading} />
+                    {/* NEW: Dual Upload Section */}
+                    <div style={{ marginBottom: '1.5rem', padding: '1.5rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '2px dashed #94a3b8', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#0f172a' }}>1. Main Class File</label>
+                            <p style={{ margin: '0 0 0.5rem 0', fontSize: '11px', color: '#64748b' }}>Video (.mp4) or Audio (.mp3)</p>
+                            <input id="media-upload" type="file" onChange={(e) => setMediaFile(e.target.files[0])} accept="video/*,audio/*,application/pdf" style={{ width: '100%', padding: '0.5rem', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer' }} disabled={isUploading} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#0f172a' }}>2. Video Thumbnail</label>
+                            <p style={{ margin: '0 0 0.5rem 0', fontSize: '11px', color: '#64748b' }}>Cover Image (.jpg, .png)</p>
+                            <input id="thumb-upload" type="file" onChange={(e) => setThumbnailFile(e.target.files[0])} accept="image/*" style={{ width: '100%', padding: '0.5rem', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer' }} disabled={isUploading} />
+                        </div>
                     </div>
 
                     {isUploading ? (
@@ -165,7 +213,7 @@ export default function TeacherPortal() {
                             <button type="button" onClick={cancelUpload} style={{ padding: '0.6rem 1.5rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Cancel Upload</button>
                         </div>
                     ) : (
-                        <button type="submit" style={{ padding: '0.85rem 2rem', backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', width: '100%' }}>Publish Online Class</button>
+                        <button type="submit" style={{ padding: '0.85rem 2rem', backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer', width: '100%' }}>Publish to {targetClass}</button>
                     )}
                 </form>
 
@@ -176,14 +224,21 @@ export default function TeacherPortal() {
                     {lessons.map(lesson => {
                         const isVideo = lesson.fileUrl && lesson.fileUrl.match(/\.(mp4|webm|ogg|mov)$/i);
                         const isAudio = lesson.fileUrl && lesson.fileUrl.match(/\.(mp3|wav|m4a|aac)$/i);
-                        const isImage = lesson.fileUrl && lesson.fileUrl.match(/\.(jpeg|jpg|gif|png|webp)$/i);
 
                         return (
                             <div key={lesson._id} style={{ padding: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '12px', backgroundColor: '#ffffff', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                
+                                {/* Header with Class & Playlist Tags */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                                     <div>
-                                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#0ea5e9', fontSize: '20px' }}>{lesson.title}</h3>
-                                        <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>{lesson.subject} • Posted by {lesson.teacherName}</p>
+                                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                            <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}>{lesson.targetClass || 'All Classes'}</span>
+                                            {lesson.playlistName && (
+                                                <span style={{ backgroundColor: '#f3e8ff', color: '#7e22ce', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}>📁 {lesson.playlistName}</span>
+                                            )}
+                                        </div>
+                                        <h3 style={{ margin: '0 0 0.2rem 0', color: '#0f172a', fontSize: '20px' }}>{lesson.title}</h3>
+                                        <p style={{ margin: '0', fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>{lesson.subject} • Posted by {lesson.teacherName}</p>
                                     </div>
                                     {lesson.teacherId === teacherId && (
                                         <button onClick={() => handleDelete(lesson._id)} style={{ background: '#fee2e2', border: 'none', color: '#ef4444', padding: '0.4rem 0.8rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>Delete</button>
@@ -192,47 +247,49 @@ export default function TeacherPortal() {
 
                                 <p style={{ margin: '0 0 1.5rem 0', fontSize: '15px', whiteSpace: 'pre-wrap', color: '#334155', lineHeight: '1.6' }}>{lesson.content}</p>
                                 
-                                {/* SMART MEDIA RENDERER */}
+                                {/* SMART MEDIA RENDERER with Thumbnails */}
                                 <div style={{ marginBottom: '1.5rem' }}>
                                     
-                                    {/* Direct Video Player */}
                                     {isVideo && (
-                                        <div style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#000', marginBottom: '1rem' }}>
-                                            <video controls style={{ width: '100%', maxHeight: '400px', display: 'block' }}>
+                                        <div style={{ width: '100%', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#000', marginBottom: '1rem', position: 'relative' }}>
+                                            <video controls poster={lesson.thumbnailUrl || ''} style={{ width: '100%', maxHeight: '450px', display: 'block', objectFit: 'contain' }}>
                                                 <source src={lesson.fileUrl} />
                                                 Your browser does not support the video element.
                                             </video>
                                         </div>
                                     )}
 
-                                    {/* Audio Player */}
                                     {isAudio && (
-                                        <div style={{ padding: '1rem', backgroundColor: '#f1f5f9', borderRadius: '8px', marginBottom: '1rem' }}>
-                                            <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>🎧 Audio Lesson</p>
-                                            <audio controls style={{ width: '100%' }}><source src={lesson.fileUrl} />Your browser does not support audio.</audio>
+                                        <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            {lesson.thumbnailUrl && <img src={lesson.thumbnailUrl} alt="Cover" style={{ width: '80px', height: '80px', borderRadius: '8px', objectFit: 'cover' }} />}
+                                            <div style={{ flex: 1 }}>
+                                                <p style={{ margin: '0 0 0.5rem 0', fontWeight: 'bold', fontSize: '14px', color: '#334155' }}>🎧 Audio Lesson</p>
+                                                <audio controls style={{ width: '100%' }}><source src={lesson.fileUrl} /></audio>
+                                            </div>
                                         </div>
                                     )}
 
-                                    {/* Chart / Image Display */}
-                                    {isImage && (
+                                    {/* Fallback for PDFs or just plain Thumbnails with no video */}
+                                    {!isVideo && !isAudio && lesson.thumbnailUrl && (
                                         <div style={{ marginBottom: '1rem' }}>
-                                            <img src={lesson.fileUrl} alt="Lesson Media" style={{ width: '100%', maxHeight: '500px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                                            <img src={lesson.thumbnailUrl} alt="Lesson Media" style={{ width: '100%', maxHeight: '400px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
                                         </div>
                                     )}
 
-                                    {/* Fallback for Unknown Documents */}
-                                    {lesson.fileUrl && !isVideo && !isAudio && !isImage && (
+                                    {lesson.fileUrl && !isVideo && !isAudio && (
                                         <a href={lesson.fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block', padding: '0.8rem 1.2rem', backgroundColor: '#e2e8f0', color: '#0f172a', fontWeight: 'bold', textDecoration: 'none', borderRadius: '8px' }}>📎 Download Attached File</a>
                                     )}
                                 </div>
 
                                 {/* SOCIAL TOOLBAR */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
-                                    <button onClick={() => handleLike(lesson._id)} style={{ background: 'none', border: 'none', color: lesson.likes?.includes(teacherId) ? '#ef4444' : '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
-                                        {lesson.likes?.includes(teacherId) ? '❤️ Liked' : '🤍 Like'} ({lesson.likes?.length || 0})
+                                    <button onClick={() => handleLike(lesson._id)} style={{ background: 'none', border: 'none', color: lesson.likes?.includes(teacherId) ? '#ef4444' : '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        {lesson.likes?.includes(teacherId) ? '❤️ Liked' : '🤍 Like'} 
+                                        <span style={{ backgroundColor: '#f1f5f9', padding: '0.1rem 0.4rem', borderRadius: '99px', fontSize: '12px' }}>{lesson.likes?.length || 0}</span>
                                     </button>
-                                    <button onClick={() => setActiveCommentLesson(activeCommentLesson === lesson._id ? null : lesson._id)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
-                                        💬 Comment ({lesson.comments?.length || 0})
+                                    <button onClick={() => setActiveCommentLesson(activeCommentLesson === lesson._id ? null : lesson._id)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        💬 Comment
+                                        <span style={{ backgroundColor: '#f1f5f9', padding: '0.1rem 0.4rem', borderRadius: '99px', fontSize: '12px' }}>{lesson.comments?.length || 0}</span>
                                     </button>
                                     <button onClick={() => handleShare(lesson)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>🔗 Share Link</button>
                                 </div>
