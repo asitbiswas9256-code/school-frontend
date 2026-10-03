@@ -8,40 +8,36 @@ export default function TeacherPortal() {
     const [youtubeLink, setYoutubeLink] = useState('');
     const [mediaFile, setMediaFile] = useState(null);
     const [message, setMessage] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
     const [lessons, setLessons] = useState([]);
 
-    // We will pull the teacher's info from local storage (or token) in a real app.
-    // For now, setting defaults so the upload works immediately.
+    // Advanced Upload States
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadStats, setUploadStats] = useState('');
+    const [xhrRequest, setXhrRequest] = useState(null);
+
+    // Comment States
+    const [activeCommentLesson, setActiveCommentLesson] = useState(null);
+    const [commentText, setCommentText] = useState('');
+
     const teacherId = "teacher123"; 
     const teacherName = "Prof. Smith";
 
-    useEffect(() => {
-        fetchLessons();
-    }, []);
+    useEffect(() => { fetchLessons(); }, []);
 
     const fetchLessons = async () => {
         try {
             const res = await fetch('https://school-backend-szf6.onrender.com/api/lessons');
-            const data = await res.json();
-            if (res.ok) setLessons(data);
+            if (res.ok) setLessons(await res.json());
         } catch (err) { console.error('Failed to fetch lessons'); }
     };
 
-    const handleFileChange = (e) => {
-        if (e.target.files && e.target.files[0]) {
-            setMediaFile(e.target.files[0]);
-        }
-    };
-
-    const handlePublish = async (e) => {
+    const handlePublish = (e) => {
         e.preventDefault();
         if (!subject || !title || !content) return setMessage('Subject, Title, and Content are required.');
         
-        setIsLoading(true);
-        setMessage('Publishing lesson... (This may take a moment if uploading a large file)');
-
-        // Because we are sending a file, we MUST use FormData instead of JSON!
+        setIsUploading(true); setMessage(''); setUploadProgress(0); setUploadStats('Preparing upload...');
+        
         const formData = new FormData();
         formData.append('teacherId', teacherId);
         formData.append('teacherName', teacherName);
@@ -49,30 +45,71 @@ export default function TeacherPortal() {
         formData.append('title', title);
         formData.append('content', content);
         formData.append('youtubeLink', youtubeLink);
-        if (mediaFile) {
-            formData.append('mediaFile', mediaFile);
-        }
+        if (mediaFile) formData.append('mediaFile', mediaFile);
 
-        try {
-            // Note: We DO NOT set 'Content-Type' when sending FormData. The browser sets it automatically with the boundary.
-            const res = await fetch('https://school-backend-szf6.onrender.com/api/lessons/publish', {
-                method: 'POST',
-                body: formData
-            });
-            const data = await res.json();
-            
-            if (res.ok) {
-                setMessage('Success! Lesson published with media.');
+        const xhr = new XMLHttpRequest();
+        setXhrRequest(xhr);
+
+        // Track Progress for MB/GB and %
+        xhr.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable) {
+                const percent = Math.round((event.loaded * 100) / event.total);
+                const loadedMB = (event.loaded / (1024 * 1024)).toFixed(2);
+                let totalMB = (event.total / (1024 * 1024)).toFixed(2);
+                let unit = 'MB';
+
+                if (totalMB > 1024) {
+                    totalMB = (totalMB / 1024).toFixed(2);
+                    unit = 'GB';
+                }
+
+                setUploadProgress(percent);
+                setUploadStats(`${loadedMB} MB / ${totalMB} ${unit}`);
+            }
+        });
+
+        xhr.addEventListener('load', () => {
+            if (xhr.status === 201) {
+                setMessage('Success! Lesson published.');
                 setSubject(''); setTitle(''); setContent(''); setYoutubeLink(''); setMediaFile(null);
-                document.getElementById('file-upload').value = ''; // Clear file input
+                document.getElementById('file-upload').value = '';
                 fetchLessons();
             } else {
-                setMessage(`Error: ${data.message}`);
+                setMessage('Upload failed. Server responded with an error.');
             }
-        } catch (err) {
-            setMessage('Network Error while uploading.');
-        }
-        setIsLoading(false);
+            setIsUploading(false); setXhrRequest(null);
+        });
+
+        xhr.addEventListener('error', () => {
+            setMessage('Network Error during upload.');
+            setIsUploading(false); setXhrRequest(null);
+        });
+
+        xhr.addEventListener('abort', () => {
+            setMessage('Upload canceled by user.');
+            setIsUploading(false); setXhrRequest(null); setUploadProgress(0); setUploadStats('');
+        });
+
+        xhr.open('POST', 'https://school-backend-szf6.onrender.com/api/lessons/publish');
+        xhr.send(formData);
+    };
+
+    const cancelUpload = () => {
+        if (xhrRequest) xhrRequest.abort();
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this lesson permanently?')) return;
+        try {
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/lessons/${id}`, { method: 'DELETE' });
+            if (res.ok) { setMessage('Lesson deleted.'); fetchLessons(); }
+        } catch (err) { setMessage('Failed to delete lesson.'); }
+    };
+
+    const handleShare = (lesson) => {
+        const link = lesson.fileUrl || lesson.youtubeLink || 'No media link available';
+        navigator.clipboard.writeText(link);
+        alert('Media link copied to clipboard!');
     };
 
     const handleLogout = () => {
@@ -91,54 +128,79 @@ export default function TeacherPortal() {
 
                 <h2 style={{ color: '#0f172a', marginBottom: '1rem' }}>Publish a Lesson</h2>
                 
-                {message && <div style={{ padding: '1rem', marginBottom: '1rem', backgroundColor: message.includes('Error') ? '#fee2e2' : '#dcfce7', color: message.includes('Error') ? '#9f1239' : '#166534', borderRadius: '8px', fontWeight: 'bold', textAlign: 'center' }}>{message}</div>}
+                {message && <div style={{ padding: '1rem', marginBottom: '1rem', backgroundColor: message.includes('Error') || message.includes('failed') || message.includes('canceled') ? '#fee2e2' : '#dcfce7', color: message.includes('Error') || message.includes('failed') || message.includes('canceled') ? '#9f1239' : '#166534', borderRadius: '8px', fontWeight: 'bold', textAlign: 'center' }}>{message}</div>}
 
                 <form onSubmit={handlePublish} style={{ marginBottom: '3rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                         <div>
                             <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Subject:</label>
-                            <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Science" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                            <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Science" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} disabled={isUploading} />
                         </div>
                         <div>
                             <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Topic Title:</label>
-                            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Gravity" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Gravity" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} disabled={isUploading} />
                         </div>
                     </div>
 
                     <div style={{ marginBottom: '1rem' }}>
                         <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem' }}>Lesson Content:</label>
-                        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Type the main lesson here..." rows="5" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', resize: 'vertical' }}></textarea>
+                        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Type the main lesson here..." rows="5" style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', resize: 'vertical' }} disabled={isUploading}></textarea>
                     </div>
 
                     <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f1f5f9', borderRadius: '8px', border: '1px dashed #94a3b8' }}>
                         <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#334155' }}>Upload Media (Image, Audio, or Video):</label>
-                        <input id="file-upload" type="file" onChange={handleFileChange} accept="image/*,video/*,audio/*" style={{ width: '100%', padding: '0.5rem', backgroundColor: 'white', borderRadius: '6px' }} />
+                        <input id="file-upload" type="file" onChange={(e) => setMediaFile(e.target.files[0])} accept="image/*,video/*,audio/*" style={{ width: '100%', padding: '0.5rem', backgroundColor: 'white', borderRadius: '6px' }} disabled={isUploading} />
                         <p style={{ margin: '0.5rem 0 0 0', fontSize: '12px', color: '#64748b' }}>Or, provide a YouTube link below instead:</p>
-                        <input type="text" value={youtubeLink} onChange={(e) => setYoutubeLink(e.target.value)} placeholder="https://youtube.com/..." style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginTop: '0.5rem' }} />
+                        <input type="text" value={youtubeLink} onChange={(e) => setYoutubeLink(e.target.value)} placeholder="https://youtube.com/..." style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', marginTop: '0.5rem' }} disabled={isUploading} />
                     </div>
 
-                    <button type="submit" disabled={isLoading} style={{ padding: '0.85rem 2rem', backgroundColor: isLoading ? '#94a3b8' : '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: isLoading ? 'not-allowed' : 'pointer' }}>
-                        {isLoading ? 'Uploading & Publishing...' : 'Publish Lesson'}
-                    </button>
+                    {/* DYNAMIC PROGRESS BAR & CANCEL BUTTON */}
+                    {isUploading ? (
+                        <div style={{ padding: '1.5rem', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '14px', fontWeight: 'bold', color: '#334155' }}>
+                                <span>Uploading... {uploadProgress}%</span>
+                                <span>{uploadStats}</span>
+                            </div>
+                            <div style={{ width: '100%', backgroundColor: '#e2e8f0', borderRadius: '99px', height: '10px', overflow: 'hidden', marginBottom: '1rem' }}>
+                                <div style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: '#0ea5e9', transition: 'width 0.2s ease' }}></div>
+                            </div>
+                            <button type="button" onClick={cancelUpload} style={{ padding: '0.6rem 1.5rem', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Cancel Upload</button>
+                        </div>
+                    ) : (
+                        <button type="submit" style={{ padding: '0.85rem 2rem', backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>
+                            Publish Lesson
+                        </button>
+                    )}
                 </form>
 
                 <h2 style={{ color: '#0f172a', marginBottom: '1rem', borderTop: '2px solid #f1f5f9', paddingTop: '2rem' }}>Recent Lessons</h2>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                     {lessons.length === 0 ? <p style={{ color: '#64748b' }}>No lessons published yet.</p> : null}
                     {lessons.map(lesson => (
                         <div key={lesson._id} style={{ padding: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
                             <h3 style={{ margin: '0 0 0.5rem 0', color: '#0ea5e9' }}>{lesson.title} <span style={{ fontSize: '14px', color: '#64748b' }}>({lesson.subject})</span></h3>
-                            <p style={{ margin: '0 0 1rem 0', fontSize: '14px', whiteSpace: 'pre-wrap' }}>{lesson.content}</p>
+                            <p style={{ margin: '0 0 1rem 0', fontSize: '14px', whiteSpace: 'pre-wrap', color: '#334155' }}>{lesson.content}</p>
                             
                             {lesson.youtubeLink && (
-                                <div style={{ marginBottom: '1rem' }}>
-                                    <a href={lesson.youtubeLink} target="_blank" rel="noreferrer" style={{ color: '#ef4444', fontWeight: 'bold', textDecoration: 'none' }}>▶️ Watch on YouTube</a>
-                                </div>
+                                <div style={{ marginBottom: '1rem' }}><a href={lesson.youtubeLink} target="_blank" rel="noreferrer" style={{ color: '#ef4444', fontWeight: 'bold', textDecoration: 'none' }}>▶️ Watch on YouTube</a></div>
+                            )}
+                            {lesson.fileUrl && (
+                                <div style={{ padding: '0.8rem', backgroundColor: '#e2e8f0', borderRadius: '8px', display: 'inline-block', marginBottom: '1rem' }}><a href={lesson.fileUrl} target="_blank" rel="noreferrer" style={{ color: '#0f172a', fontWeight: 'bold', textDecoration: 'none' }}>📎 View Attached Media File</a></div>
                             )}
 
-                            {lesson.fileUrl && (
-                                <div style={{ padding: '1rem', backgroundColor: '#e2e8f0', borderRadius: '8px', display: 'inline-block' }}>
-                                    <a href={lesson.fileUrl} target="_blank" rel="noreferrer" style={{ color: '#0f172a', fontWeight: 'bold', textDecoration: 'none' }}>📎 View Attached Media File</a>
+                            {/* SOCIAL TOOLBAR */}
+                            <div style={{ display: 'flex', gap: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '1rem' }}>
+                                <button style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>❤️ Like</button>
+                                <button onClick={() => setActiveCommentLesson(activeCommentLesson === lesson._id ? null : lesson._id)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>💬 Comment</button>
+                                <button onClick={() => handleShare(lesson)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}>🔗 Share</button>
+                                <button onClick={() => handleDelete(lesson._id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontWeight: 'bold', marginLeft: 'auto' }}>🗑️ Delete</button>
+                            </div>
+
+                            {/* COMMENT BOX UI */}
+                            {activeCommentLesson === lesson._id && (
+                                <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
+                                    <input type="text" value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Write a review or question..." style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                                    <button style={{ padding: '0.6rem 1rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}>Post</button>
                                 </div>
                             )}
                         </div>
