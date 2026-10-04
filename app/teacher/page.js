@@ -88,7 +88,7 @@ export default function TeacherPortal() {
         e.preventDefault();
         setProfileMessage('Updating...');
         try {
-            const res = await fetch(`https://school-backend-szf6.onrender.com/api/admin/update-email`, {
+            const res = await fetch(`https://school-backend-szf6.onrender.com/api/teacher/update-email`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: teacherId, email: myEmail })
             });
             if (res.ok) setProfileMessage('Email successfully saved! You can now use the Forgot Password feature.');
